@@ -14,14 +14,19 @@ const backgroundImageUrl = ref("/images/cool_backgrounds.png")
     </div>
 </template>
 
-<style lang="css">
+<style scoped lang="css">
 .results-page {
     font-family: 'Helvetica Neue', Arial, sans-serif;
     margin: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100vh;
     display: flex;
-    flex-direction: column;
-    width: calc(100vw - 16px);
-    height: calc(100vh - 16px);
+    flex-direction: column;    
 }
 
 .results-title {
@@ -42,6 +47,7 @@ const backgroundImageUrl = ref("/images/cool_backgrounds.png")
     padding: 20px;
     border-radius: 5px;
     height: 100%;
+    /* width: 100%; */
     background-image: url(/images/cool_backgrounds.png);
     background-size: cover;
     background-position: center;
