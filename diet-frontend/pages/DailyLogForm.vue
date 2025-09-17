@@ -7,7 +7,7 @@
             <form @submit.prevent="handleSubmit">
                 <div class="row align-items-stretch">
                     <!-- 左側: 写真アップロード -->
-                    <div class="col-md-6 d-flex flex-column">
+                    <div class="form-group col-md-6 d-flex flex-column">
                         <label for="meal-picture" class="mb-2 fs-3">
                             今日のご飯
                         </label>
@@ -15,20 +15,22 @@
                             今日食べたご飯の写真をアップロードしてください
                         </small>
                         <input
-                        id="meal-picture"
-                        type="file"
-                        class="form-control mb-3"
-                        @change="handleFileUpload"
+                            id="meal-picture"
+                            type="file"
+                            class="form-control mb-3"
+                            accept="image/*"
+                            @change="handleFileUpload"
+                            required
                         />
 
                         <!-- プレビュー領域 -->
                         <div class="preview-field d-flex justify-content-center align-items-center border" style="height: 500px; overflow: hidden;">
                             <div v-if="previewUrl" class="d-flex justify-content-center align-items-center w-100 h-100">
                                 <img
-                                :src="previewUrl"
-                                alt="preview"
-                                class="img-thumbnail"
-                                style="height: 100%; width: auto; object-fit: contain;"
+                                    :src="previewUrl"
+                                    alt="preview"
+                                    class="img-thumbnail"
+                                    style="height: 100%; width: auto; object-fit: contain;"
                                 />
                             </div>
                             <div v-else class="text-muted text-center">
@@ -49,6 +51,7 @@
                                     type="text"
                                     placeholder="今日の体重を入力してください"
                                     v-model="form.weight"
+                                    required
                                 />
                                 <span class="input-group-text">kg</span>
                             </div>
@@ -58,13 +61,14 @@
                           <label for="exercise-time">運動習慣</label>
                             <div class="input-group">
                                 <input
-                                id="exercise-time"
-                                class="form-control"
-                                type="number"
-                                min="0"
-                                max="24"
-                                placeholder="今日の運動時間を入力してください"
-                                v-model="form.exercise_time"
+                                    id="exercise-time"
+                                    class="form-control"
+                                    type="number"
+                                    min="0"
+                                    max="24"
+                                    placeholder="今日の運動時間を入力してください"
+                                    v-model="form.exercise_time"
+                                    required
                                 />
                                 <span class="input-group-text">時間</span>
                             </div>
@@ -82,6 +86,7 @@
                                     max="24"
                                     placeholder="昨日の睡眠時間を入力してください"
                                     v-model="form.sleep_time"
+                                    required
                                 />
                                 <span class="input-group-text">時間</span>
                             </div>
@@ -146,3 +151,11 @@
     }
 
 </script>
+
+<style lang="css" scoped>
+    .form-group:has(input:required) > label::after {
+        content: " *";
+        color: red;
+        margin-left: 2px;
+    }
+</style>

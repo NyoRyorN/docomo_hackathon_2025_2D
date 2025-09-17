@@ -7,7 +7,7 @@
             <form @submit.prevent="handleSubmit">
                 <div class="row align-items-stretch">
                     <!-- 左側: 写真アップロード -->
-                    <div class="col-md-6 d-flex flex-column">
+                    <div class="form-group col-md-6 d-flex flex-column">
                         <label for="user-picture" class="mb-2 fs-3">
                             現在のあなた
                         </label>
@@ -15,10 +15,12 @@
                             あなたの正面から見た顔の画像を選択してください
                         </small>
                         <input
-                        id="user-picture"
-                        type="file"
-                        class="form-control mb-3"
-                        @change="handleFileUpload"
+                            id="user-picture"
+                            type="file"
+                            class="form-control mb-3"
+                            accept="image/*"
+                            @change="handleFileUpload"
+                            required
                         />
 
                         <!-- プレビュー領域 -->
@@ -47,6 +49,7 @@
                             type="text"
                             placeholder="名前を入力してください"
                             v-model="form.name"
+                            required
                         />
                         </div>
 
@@ -61,6 +64,7 @@
                                 max="300"
                                 placeholder="身長を入力してください"
                                 v-model="form.height"
+                                required
                             />
                             <span class="input-group-text">cm</span>
                             </div>
@@ -77,6 +81,7 @@
                                 max="200"
                                 placeholder="年齢を入力してください"
                                 v-model="form.age"
+                                required
                             />
                             <span class="input-group-text">歳</span>
                             </div>
@@ -84,7 +89,7 @@
 
                         <div class="form-group my-3">
                             <label for="gender">性別</label>
-                            <select id="gender" class="form-select" v-model="form.gender">
+                            <select id="gender" class="form-select" v-model="form.gender" required>
                                 <option disabled value="">選択してください</option>
                                 <option value="male">男性</option>
                                 <option value="female">女性</option>
@@ -101,6 +106,7 @@
                                 type="number"
                                 placeholder="1ヶ月後に目指す体重を入力してください"
                                 v-model="form.weight_ideal"
+                                required
                             />
                             <span class="input-group-text">kg</span>
                             </div>
@@ -144,27 +150,76 @@
 
     import { reactive, ref } from "vue"
 
-    const form = reactive({
-        name: "",
-        height: "",
-        age: "",
-        gender: "",
-        weight_ideal: "",
-        picture: null,
-    })
 
+    const form = reactive({
+            name: "",
+            age: "",
+            height: "",
+            gender: "",
+            weight: "",
+            exercise_time: "",
+            sleep_time: "",
+            user_id: "user123",   // 任意で付与
+            session_id: "sess001" // 任意で付与
+        });
     const previewUrl = ref(null)
 
+    // 写真表示
     function handleFileUpload(event) {
-    const file = event.target.files[0]
-    if (file) {
-        form.picture = file
-        previewUrl.value = URL.createObjectURL(file)
-    }
+        const file = event.target.files[0]
+        if (file) {
+            form.picture = file
+            previewUrl.value = URL.createObjectURL(file)
+        }
     }
 
-    function handleSubmit() {
-        alert(`お名前: ${form.name}\n身長: ${form.height}cm\n年齢: ${form.age}歳\n理想の体重: ${form.weight_ideal}kg\n写真: ${form.picture?.name || "なし"}`)
-    }
+    // submit
+    const responseData = ref(null);
+    const handleSubmit = async () => {
+        //alert(`お名前: ${form.name}\n身長: ${form.height}cm\n年齢: ${form.age}歳\n理想の体重: ${form.weight_ideal}kg\n写真: ${form.picture?.name || "なし"}`)
+        for (const key in form) {
+            if (!form[key]) {
+                alert("全ての項目を入力してください");
+                return; // 空欄があれば送信中止
+            }
+        }
+
+        // const fd = new FormData();
+        // fd.append("user_id", form.user_id);
+        // fd.append("session_id", form.session_id);
+        // // フォーム情報を JSON 文字列にして送る
+        // fd.append("form_data", JSON.stringify({
+        //     name: form.name,
+        //     age: form.age,
+        //     height: form.height,
+        //     gender: form.gender,
+        //     weight: form.weight,
+        //     exercise_time: form.exercise_time,
+        //     sleep_time: form.sleep_time
+        // }));
+
+        // try {
+        //     const res = await axios.post("http://localhost:8000/generate-answer", fd, {
+        //         headers: { "Content-Type": "multipart/form-data" }
+        //     });
+        //     responseData.value = res.data;
+        // } catch (err) {
+        //     console.error(err);
+        //     alert("送信に失敗しました");
+        // }
+    };
 
 </script>
+
+<style lang="css" scoped>
+    .form-group:has(input:required) > label::after {
+        content: " *";
+        color: red;
+        margin-left: 2px;
+    }
+    .form-group:has(select:required) > label::after {
+        content: " *";
+        color: red;
+        margin-left: 2px;
+    }
+</style>
