@@ -109,7 +109,7 @@ def init_main() -> FastAPI:
             past: Dict[str, Any] = {}
             init: list[str] = []
             if fetch_info:
-                init,past = fetch_info(user_id=user_id, session_id=session_id) or {}
+                init,past = fetch_info(user_id=user_id, session_id=session_id) or [],{}
             
 
             # (b) 回答生成（必須）
