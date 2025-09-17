@@ -2,20 +2,20 @@
     <div class="card mx-auto my-5" style="width: 75%;">
         <div class="card-body">    
             <h3 class="card-title text-center">
-                あなたのことを教えてください
+                今日のあなたのことを教えてください
             </h3>
             <form @submit.prevent="handleSubmit">
                 <div class="row align-items-stretch">
                     <!-- 左側: 写真アップロード -->
                     <div class="col-md-6 d-flex flex-column">
-                        <label for="user-picture" class="mb-2 fs-3">
-                            現在のあなた
+                        <label for="meal-picture" class="mb-2 fs-3">
+                            今日のご飯
                         </label>
                         <small class="form-text text-muted mb-3">
-                            あなたの正面から見た顔の画像を選択してください
+                            今日食べたご飯の写真をアップロードしてください
                         </small>
                         <input
-                        id="user-picture"
+                        id="meal-picture"
                         type="file"
                         class="form-control mb-3"
                         @change="handleFileUpload"
@@ -35,74 +35,55 @@
                                 画像がここに表示されます
                             </div>
                         </div>
+
                     </div>
 
                     <!-- 右側: 入力フォーム -->
-                    <div class="col-md-6 py-3 d-flex flex-column">
+                    <div class="col-md-6 pt-5 pb-3 d-flex flex-column">
                         <div class="form-group my-3">
-                        <label for="user-name">名前</label>
-                        <input
-                            id="user-name"
-                            class="form-control"
-                            type="text"
-                            placeholder="名前を入力してください"
-                            v-model="form.name"
-                        />
-                        </div>
-
-                        <div class="form-group my-3">
-                            <label for="user-height">身長</label>
+                            <label for="user-weight">今日の体重</label>
                             <div class="input-group">
-                            <input
-                                id="user-height"
-                                class="form-control"
-                                type="number"
-                                min="0"
-                                max="300"
-                                placeholder="身長を入力してください"
-                                v-model="form.height"
-                            />
-                            <span class="input-group-text">cm</span>
+                                <input
+                                    id="user-weight"
+                                    class="form-control"
+                                    type="text"
+                                    placeholder="今日の体重を入力してください"
+                                    v-model="form.weight"
+                                />
+                                <span class="input-group-text">kg</span>
                             </div>
                         </div>
 
                         <div class="form-group my-3">
-                            <label for="user-age">年齢</label>
+                          <label for="exercise-time">運動習慣</label>
                             <div class="input-group">
-                            <input
-                                id="user-age"
+                                <input
+                                id="exercise-time"
                                 class="form-control"
                                 type="number"
                                 min="0"
-                                max="200"
-                                placeholder="年齢を入力してください"
-                                v-model="form.age"
-                            />
-                            <span class="input-group-text">歳</span>
+                                max="24"
+                                placeholder="今日の運動時間を入力してください"
+                                v-model="form.exercise_time"
+                                />
+                                <span class="input-group-text">時間</span>
                             </div>
                         </div>
 
-                        <div class="form-group my-3">
-                            <label for="gender">性別</label>
-                            <select id="gender" class="form-select" v-model="form.gender">
-                                <option disabled value="">選択してください</option>
-                                <option value="male">男性</option>
-                                <option value="female">女性</option>
-                                <option value="none">秘密</option>
-                            </select>
-                        </div>
 
-                        <div class="form-group my-5">
-                            <label for="user-weight-ideal">理想の体重</label>
+                        <div class="form-group my-3">
+                            <label for="sleep-time">睡眠時間</label>
                             <div class="input-group">
-                            <input
-                                id="user-weight-ideal"
-                                class="form-control"
-                                type="number"
-                                placeholder="1ヶ月後に目指す体重を入力してください"
-                                v-model="form.weight_ideal"
-                            />
-                            <span class="input-group-text">kg</span>
+                                <input
+                                    id="sleep-time"
+                                    class="form-control"
+                                    type="number"
+                                    min="0"
+                                    max="24"
+                                    placeholder="昨日の睡眠時間を入力してください"
+                                    v-model="form.sleep_time"
+                                />
+                                <span class="input-group-text">時間</span>
                             </div>
                         </div>
                     </div>
@@ -112,7 +93,7 @@
                 <!-- ボタン -->
                 <div class="row mt-3 mx-auto">
                     <button type="submit" class="btn btn-primary w-50 mx-auto fs-4">
-                        更新・登録
+                        未来の自分を見る
                     </button>
                 </div>
             </form>
@@ -145,12 +126,9 @@
     import { reactive, ref } from "vue"
 
     const form = reactive({
-        name: "",
-        height: "",
-        age: "",
-        gender: "",
-        weight_ideal: "",
-        picture: null,
+        weight: "",
+        exercise_time: "",
+        sleep_time: "",
     })
 
     const previewUrl = ref(null)
@@ -164,7 +142,7 @@
     }
 
     function handleSubmit() {
-        alert(`お名前: ${form.name}\n身長: ${form.height}cm\n年齢: ${form.age}歳\n理想の体重: ${form.weight_ideal}kg\n写真: ${form.picture?.name || "なし"}`)
+        alert(`今日の体重: ${form.weight}kg\n運動時間: ${form.exercise_time}時間\n昨日の睡眠時間: ${form.sleep_time}`)
     }
 
 </script>
