@@ -105,7 +105,7 @@ def init_main() -> FastAPI:
                 raise HTTPException(status_code=400, detail="画像が空です。")
 
             # (a) 過去情報
-            fetch_info = load_func("database", "fetch_past_info", required=False)
+            fetch_info = load_func("database", "fetch_info", required=False)
             past: Dict[str, Any] = {}
             init: list[str] = []
             if fetch_info:
