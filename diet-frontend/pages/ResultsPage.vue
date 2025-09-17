@@ -1,6 +1,6 @@
 <script setup>
 import ImageFrame from '~/components/ImageFrame.vue'
-
+const showFatAtFutureImage = ref(true)
 </script>
 
 <template>
@@ -8,7 +8,8 @@ import ImageFrame from '~/components/ImageFrame.vue'
         <div class="results-main">
             <div class="results-images">
                 <ImageFrame imageUrl="/images/Before.jpg" class="before-image"/>
-                <ImageFrame imageUrl="/images/After.jpg" class="after-image"/>
+                <ImageFrame v-if="showFatAtFutureImage" imageUrl="/images/After.jpg" class="after-image"/>
+                <ImageFrame v-else imageUrl="/images/goodAfter.jpg" class="after-image"/>
             </div>
             <div class="recommendations">
                 <div class="score-container">
@@ -25,7 +26,7 @@ import ImageFrame from '~/components/ImageFrame.vue'
                     <li>ストレス管理を行う</li>
                 </ul>
                 <div class="desired_buttons">
-                    <NuxtLink to="/" class="navigator_link">
+                    <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
                         理想の自分へ
                     </NuxtLink>
                 </div>
