@@ -105,16 +105,18 @@ def init_main() -> FastAPI:
                 raise HTTPException(status_code=400, detail="画像が空です。")
 
             # (a) 過去情報
-            fetch_past_info = load_func("database", "fetch_past_info", required=False)
+            fetch_info = load_func("database", "fetch_past_info", required=False)
             past: Dict[str, Any] = {}
-            if fetch_past_info:
-                past = fetch_past_info(user_id=user_id, session_id=session_id) or {}
+            init: list[str] = []
+            if fetch_info:
+                init,past = fetch_info(user_id=user_id, session_id=session_id) or {}
+            
 
             # (b) 回答生成（必須）
             generate_answer = load_func("generater", "generate_answer", required=True)
             if not generate_answer:
                 raise HTTPException(status_code=501, detail="generate_answer が未実装です。")
-            result = generate_answer(meal_bytes, face_bytes, past)
+            result = generate_answer(meal_bytes, face_bytes, past, init)
 
             # result から表示用 answer を抽出
             if isinstance(result, dict) and "answer" in result:
