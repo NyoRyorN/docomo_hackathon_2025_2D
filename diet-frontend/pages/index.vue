@@ -60,7 +60,7 @@ onMounted(() => {
                 <NuxtLink to="/foo" class="navigator_link">
                     始める
                 </NuxtLink>
-                <NuxtLink to="/poo" class="navigator_link">
+                <NuxtLink to="/BasicInfoForm" class="navigator_link">
                     プロフィールを入力する
                 </NuxtLink>
             </div>
