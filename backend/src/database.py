@@ -6,13 +6,13 @@
 
 概要
 - save_init_list: 固定情報の保存（プロフィール画像はURL）
-- fetch_info: プロフィール + 直近7日分ログ（各日最新1件）
+- fetch_info: プロフィール + 直近7回分ログ
 - save_generated_answer: 生成結果の保存（result dict仕様）
 - add_meal_log: 食事/体重/睡眠ログの追加（画像はURL）
 
 注意
 - RDS接続情報は環境変数で設定してください（DB_HOST, DB_USER, DB_PASSWORD, DB_NAME）。
-- 本番では AWS Secrets Manager / IAM auth 等の利用を推奨。
+- 本番では AWS Secrets Manager / IAM auth 等の利用を推奨。(デモ用にRDSの構成は簡略化)
 """
 
 import os
@@ -64,13 +64,15 @@ def _ensure_tables():
     CREATE TABLE IF NOT EXISTS generated_answers (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(64) NOT NULL,
-        ration FLOAT NULL,
         answer TEXT NULL,
-        generated_image_url VARCHAR(1024) NULL,
+        score_percent FLOAT NULL,
+        improvement TEXT NULL,
+        future_image_url VARCHAR(1024) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         KEY idx_user_created (user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
+
 
     # 既存テーブルの最小ALTER（URL列追加、旧BLOB列を可能ならDROP）
     alters = [
@@ -81,8 +83,8 @@ def _ensure_tables():
         "ALTER TABLE meal_log ADD COLUMN IF NOT EXISTS meal_image_url VARCHAR(1024) NULL AFTER created_at",
         "ALTER TABLE meal_log DROP COLUMN IF EXISTS meal_image",
         # generated_answers
-        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS ration FLOAT NULL AFTER user_id",
-        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS answer TEXT NULL AFTER ration",
+        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS ratio FLOAT NULL AFTER user_id",
+        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS answer TEXT NULL AFTER ratio",
         "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS generated_image_url VARCHAR(1024) NULL AFTER answer",
         "ALTER TABLE generated_answers DROP COLUMN IF EXISTS result_text",
         "ALTER TABLE generated_answers DROP COLUMN IF EXISTS result_image",
@@ -142,6 +144,7 @@ def save_init_list(
         return 0
     finally:
         conn.close()
+    return True
 
 def fetch_info(user_id: str):
     """
@@ -156,6 +159,7 @@ def fetch_init_info(user_id: str):
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
+            # user_idで1件取得
             cur.execute(
                 "SELECT height, gender, years, individual_photo_url FROM user_profile WHERE user_id=%s",
                 (user_id,)
@@ -177,6 +181,7 @@ def fetch_init_info(user_id: str):
             }
     finally:
         conn.close()
+    return True
 
 def fetch_past_info(user_id: str):
     """
@@ -223,41 +228,51 @@ def fetch_past_info(user_id: str):
 # =============================
 def save_generated_answer(result: dict) -> int:
     """
-    生成結果の保存（result 辞書を受け取る版）
+    生成結果の保存（置き換え版）
     必須: result['user_id']
-    任意: result['ration'] (float), result['answer'] (str), result['generated_image'] (URL str)
-    戻り値: 0（成功時）
-
-    result = {
-        "user_id": "sekizawa",   # str, 必須
-        "ration": None,          # float | None
-        "answer": None,          # str   | None
-        "generated_image": None  # str   | None （画像URL）
-    }
+    任意: result['answer'], result['score_percent'], result['improvement'] / 'improvement ', result['future_image_url']
     """
     _ensure_tables()
 
     user_id = result.get("user_id")
-    ration = result.get("ration")
-    answer = result.get("answer")
-    generated_image_url = result.get("generated_image")  # URLをそのまま保存
-
     if not user_id:
         raise ValueError("result['user_id'] は必須です。")
 
+    answer = result.get("answer")
+
+    # score_percent は数値/文字列の両方を許容
+    score_percent = result.get("score_percent")
+    try:
+        if score_percent is not None:
+            score_percent = float(score_percent)
+    except (TypeError, ValueError):
+        score_percent = None
+
+    # "improvement" と "improvement "（末尾スペース）両対応
+    improvement = result.get("improvement")
+    if improvement is None and "improvement " in result:
+        improvement = result.get("improvement ")
+
+    # 画像URLは new: future_image_url を優先
+    future_image_url = (
+        result.get("future_image_url")
+        or result.get("generated_picture")   # 互換キー（もし来る場合）
+        or result.get("generated_image")     # 互換キー（もし来る場合）
+    )
+
     sql = """
-    INSERT INTO generated_answers (user_id, ration, answer, generated_image_url, created_at)
-    VALUES (%s, %s, %s, %s, NOW())
+    INSERT INTO generated_answers (user_id, answer, score_percent, improvement, future_image_url, created_at)
+    VALUES (%s, %s, %s, %s, %s, NOW())
     """
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(sql, (user_id, ration, answer, generated_image_url))
+            cur.execute(sql, (user_id, answer, score_percent, improvement, future_image_url))
         return 0
     finally:
         conn.close()
 
-    return 0
+
 
 # =============================
 # 入力補助
@@ -306,7 +321,7 @@ if __name__ == "__main__":
     # 生成結果（result dict仕様）
     result = {
         "user_id": uid,
-        "ration": 0.82,
+        "ratio": 0.82,
         "answer": "今日の提案：たんぱく質を少し増やしましょう。",
         "generated_image": "https://example.com/ai_result.png"
     }

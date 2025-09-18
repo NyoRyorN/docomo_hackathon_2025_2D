@@ -6,6 +6,9 @@ import logging
 import pathlib
 import sys
 from typing import Any, Dict, List, Optional, Union, Callable
+import base64
+import urllib.parse
+import httpx
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,23 +32,88 @@ def load_func(module_name: str, func_name: str, required: bool = False) -> Optio
             raise
         return None
 
+async def url_to_bytes(
+    url: str,
+    *,
+    timeout: float = 10.0,
+    max_bytes: int = 8 * 1024 * 1024,  # 8MB
+    require_image: bool = True,
+) -> bytes:
+    """
+    画像URL(https://...) または data URL(data:image/png;base64,...) を bytes に変換。
+    - require_image=True のとき Content-Type が image/* でないと 400 を返す
+    - max_bytes を超えたら 413 を返す
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="URL が空です。")
+
+    # data URL 対応
+    if url.startswith("data:"):
+        header, data = url.split(",", 1)
+        if require_image and "image" not in header.lower():
+            raise HTTPException(status_code=400, detail="data URL が画像ではありません。")
+        try:
+            if ";base64" in header.lower():
+                content = base64.b64decode(data, validate=True)
+            else:
+                content = urllib.parse.unquote_to_bytes(data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"data URL のデコードに失敗しました: {e}") from e
+        if len(content) > max_bytes:
+            raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
+        return content
+
+    # 通常の http(s) URL
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            async with client.stream("GET", url) as resp:
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    raise HTTPException(status_code=400, detail=f"画像URLの取得に失敗しました: {e}") from e
+
+                ctype = resp.headers.get("content-type", "")
+                if require_image and "image" not in ctype.lower():
+                    raise HTTPException(status_code=400, detail=f"URLは画像ではありません: {ctype or 'unknown'}")
+
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > max_bytes:
+                        raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
+                return bytes(buf)
+
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=400, detail=f"画像URLへ接続できませんでした: {e}") from e
+
 # =========================
 #  Pydantic モデル
 # =========================
 class InitRequest(BaseModel):
-    """init_button で送られてくるリスト等をDBに保存"""
-    items: List[Any] = Field(..., description="初期データのリスト（任意の構造で可）")
-    user_id: Optional[str] = Field(None, description="ユーザ識別子（任意）")
+    """init_button で送られてくる初期データをDBに保存"""
+    user_id: str = Field(..., description="ユーザ識別子（必須）")
     session_id: Optional[str] = Field(None, description="セッション識別子（任意）")
+
+    name: Optional[str] = Field(None, description="ユーザ名（任意）")
+    age: Optional[int] = Field(None, description="年齢（任意、DBでは years に対応）")
+    height: Optional[float] = Field(None, description="身長（任意）")
+    gender: Optional[str] = Field(None, description="性別（任意）")
+    weight_ideal: Optional[float] = Field(None, description="理想体重（任意）")
+    picture: Optional[str] = Field(None, description="プロフィール画像URL（任意）")
+
 
 class InitResponse(BaseModel):
     ok: bool
     stored_count: int
 
 class AnswerResponse(BaseModel):
-    """生成された回答を返す（任意のJSONを包含できるように）"""
-    answer: Union[str, Dict[str, Any]]
-    meta: Optional[Dict[str, Any]] = None
+    """生成された回答を返す"""
+    ok: bool
+    answer: Union[str, Dict[str, Any]] = Field(..., description="生成された回答（文字列 or 詳細辞書）")
+    score_percent: Optional[float] = Field(None, description="スコア（%）")
+    improvement: Optional[str] = Field(None, description="改善点（文字列）")
+    future_image_url: Optional[str] = Field(None, description="将来予測画像のURL（任意）")
+    current_image_url: Optional[str] = Field(None, description="現在の画像のURL（任意）")
 
 
 # =========================
@@ -80,74 +148,100 @@ def init_main() -> FastAPI:
         try:
             save_init_list = load_func("database", "save_init_list", required=False)
             if save_init_list:
-                save_init_list(req.items, user_id=req.user_id, session_id=req.session_id)
+                save_init_list(
+                    user_id=req.name,
+                    height=req.height,
+                    gender=req.gender,
+                    years=req.age,
+                    individual_photo_url=req.picture
+                )
             # 関数が無い場合は何もしないで成功扱い
-            return InitResponse(ok=True, stored_count=len(req.items))
+            return InitResponse(ok=True, stored_count=1)
         except Exception as e:
             logger.exception("failed to save init list: %s", e)
             raise HTTPException(status_code=500, detail=f"failed to save init list: {e}") from e
 
-    # ========= 役割 (2) 画像→過去取得→回答生成→保存→返却 =========
-    # - fetch_past_info: あれば呼ぶ／無ければ空dict
-    # - generate_answer: 必須（無ければ 501 Not Implemented）
-    # - save_generated_answer: あれば呼ぶ／無ければスキップ
+
+    # ========= 役割 (2) 画像URL→過去取得→回答生成→保存→返却 =========
     @app.post("/generate-answer", response_model=AnswerResponse, tags=["generate"])
     async def generate_from_images(
-        meal_image: UploadFile = File(..., description="食事画像（jpg/png等）"),
-        face_image: UploadFile = File(..., description="顔画像（jpg/png等）"),
-        user_id: Optional[str] = Form(None),
-        session_id: Optional[str] = Form(None),
+        name: str = Form(..., description="ユーザ名（user_idとして利用）"),
+        weight: Optional[float] = Form(None, description="体重"),
+        exercise_time: Optional[float] = Form(None, description="運動時間（分）"),
+        sleep_time: Optional[float] = Form(None, description="睡眠時間（時間）"),
+        picture: str = Form(..., description="食事画像のURL（jpg/png等）"),
     ) -> AnswerResponse:
         try:
-            meal_bytes = await meal_image.read()
-            face_bytes = await face_image.read()
-            if not meal_bytes or not face_bytes:
-                raise HTTPException(status_code=400, detail="画像が空です。")
+            user_id = name
 
-            # (a) 過去情報
+            # (a) 過去情報（必要なら取得）
             fetch_info = load_func("database", "fetch_info", required=False)
+            init: Dict[str, Any] = {}
             past: Dict[str, Any] = {}
-            init: list[str] = []
             if fetch_info:
-                init,past = fetch_info(user_id=user_id, session_id=session_id) or [],{}
-            
+                try:
+                    init, past = fetch_info(user_id=user_id)
+                except TypeError:
+                    init, past = fetch_info(user_id)
 
-            # (b) 回答生成（必須）
+            # (b) 画像URL→バイト列（必須の食事画像 / 顔はあれば）
+            meal_bytes = await url_to_bytes(picture, require_image=True)
+
+            face_bytes = None
+            face_url = init.get("individual_photo_url")
+            if face_url:
+                face_bytes = await url_to_bytes(face_url, require_image=True)
+
+            # init/past から画像URLは削除（generate には渡さない想定）
+            init.pop("individual_photo_url", None)
+            for v in past.values():
+                if isinstance(v, dict):
+                    v.pop("meal_image_url", None)
+
+            # init に直近の値を注入
+            if weight is not None:
+                init["weight_kg"] = weight
+            if exercise_time is not None:
+                init["exercise_time"] = exercise_time
+            if sleep_time is not None:
+                init["sleep_hour"] = sleep_time
+
+            # (c) 回答生成（必須）
             generate_answer = load_func("generater", "generate_answer", required=True)
             if not generate_answer:
                 raise HTTPException(status_code=501, detail="generate_answer が未実装です。")
-            result = generate_answer(meal_bytes, face_bytes, past, init)
 
-            # result から表示用 answer を抽出
-            if isinstance(result, dict) and "answer" in result:
-                answer_value = result["answer"]
-                answer_payload = result
+            raw_result = generate_answer(meal_bytes, face_bytes, past, init)
+
+            # dict 以外でも壊れないように整形
+            if isinstance(raw_result, dict):
+                result = dict(raw_result)  # コピー
             else:
-                answer_value = result
-                answer_payload = {"answer": result}
+                result = {"answer": raw_result}
 
-            # (c) 生成結果を保存（存在すれば）
+            # 保存関数が user_id 必須のため補完
+            result.setdefault("user_id", user_id)
+
+            # (d) 生成結果を保存（存在すれば）
             save_generated_answer = load_func("database", "save_generated_answer", required=False)
             if save_generated_answer:
                 try:
-                    save_generated_answer(answer_payload, user_id=user_id, session_id=session_id)
+                    save_generated_answer(result)
                 except Exception as se:
                     logger.warning("save_generated_answer failed but continue: %s", se)
 
-            # (d) 返却
+            # (e) 返却（answer は必須なので None フォールバック）
             return AnswerResponse(
-                answer=answer_value,
-                meta={
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "meal_filename": meal_image.filename,
-                    "face_filename": face_image.filename,
-                },
+                ok=True,
+                answer=result.get("answer") if result.get("answer") is not None else "",
+                score_percent=result.get("score_percent"),
+                improvement=result.get("improvement") or result.get("improvement "),
+                future_image_url=result.get("future_image_url"),
             )
+
         except HTTPException:
             raise
         except ModuleNotFoundError as e:
-            # generate_answer が未実装など
             raise HTTPException(status_code=501, detail=f"必要なモジュール/関数が未実装です: {e}") from e
         except Exception as e:
             logger.exception("generate_from_images failed: %s", e)
