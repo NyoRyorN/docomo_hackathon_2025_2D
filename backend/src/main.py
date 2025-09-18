@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Union, Callable
 import base64
 import urllib.parse
 import httpx
+from database import save_init_list, fetch_info, save_generated_answer
+from generater import generate_answer
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,18 +22,6 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.append(str(_THIS_DIR))
 
 # -------- ヘルパ：遅延で関数読込（存在しなければ None かエラー） --------
-def load_func(module_name: str, func_name: str, required: bool = False) -> Optional[Callable]:
-    try:
-        mod = importlib.import_module(module_name)
-        fn = getattr(mod, func_name)
-        if callable(fn):
-            return fn
-        raise AttributeError
-    except Exception:
-        if required:
-            raise
-        return None
-
 async def url_to_bytes(
     url: str,
     *,
@@ -146,15 +136,13 @@ def init_main() -> FastAPI:
     @app.post("/init", response_model=InitResponse, tags=["init"])
     def store_init_list(req: InitRequest) -> InitResponse:
         try:
-            save_init_list = load_func("database", "save_init_list", required=False)
-            if save_init_list:
-                save_init_list(
-                    user_id=req.name,
-                    height=req.height,
-                    gender=req.gender,
-                    years=req.age,
-                    individual_photo_url=req.picture
-                )
+            save_init_list(
+                user_id=req.name,
+                height=req.height,
+                gender=req.gender,
+                years=req.age,
+                individual_photo_url=req.picture
+            )
             # 関数が無い場合は何もしないで成功扱い
             return InitResponse(ok=True, stored_count=1)
         except Exception as e:
@@ -175,14 +163,11 @@ def init_main() -> FastAPI:
             user_id = name
 
             # (a) 過去情報（必要なら取得）
-            fetch_info = load_func("database", "fetch_info", required=False)
+
             init: Dict[str, Any] = {}
             past: Dict[str, Any] = {}
-            if fetch_info:
-                try:
-                    init, past = fetch_info(user_id=user_id)
-                except TypeError:
-                    init, past = fetch_info(user_id)
+
+            init, past = fetch_info(user_id=user_id)
 
             # (b) 画像URL→バイト列（必須の食事画像 / 顔はあれば）
             meal_bytes = await url_to_bytes(picture, require_image=True)
@@ -207,9 +192,6 @@ def init_main() -> FastAPI:
                 init["sleep_hour"] = sleep_time
 
             # (c) 回答生成（必須）
-            generate_answer = load_func("generater", "generate_answer", required=True)
-            if not generate_answer:
-                raise HTTPException(status_code=501, detail="generate_answer が未実装です。")
 
             raw_result = generate_answer(meal_bytes, face_bytes, past, init)
 
@@ -223,12 +205,7 @@ def init_main() -> FastAPI:
             result.setdefault("user_id", user_id)
 
             # (d) 生成結果を保存（存在すれば）
-            save_generated_answer = load_func("database", "save_generated_answer", required=False)
-            if save_generated_answer:
-                try:
-                    save_generated_answer(result)
-                except Exception as se:
-                    logger.warning("save_generated_answer failed but continue: %s", se)
+            save_generated_answer(result)
 
             # (e) 返却（score_percent は str、answer は必須）
             return AnswerResponse(
