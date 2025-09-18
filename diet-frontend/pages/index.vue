@@ -57,7 +57,7 @@ onMounted(() => {
               あなたの健康をサポートします。今すぐ始めましょう！
             </p>
             <div class="buttons">
-                <NuxtLink to="/ResultsPage" class="navigator_link">
+                <NuxtLink to="/DailyLogForm" class="navigator_link">
                     始める
                 </NuxtLink>
                 <NuxtLink to="/BasicInfoForm" class="navigator_link">
