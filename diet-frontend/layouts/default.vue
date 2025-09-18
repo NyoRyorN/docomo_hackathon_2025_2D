@@ -5,7 +5,7 @@ const backgroundImageUrl = ref("/images/cool_backgrounds.png")
 <template>
     <div class="results-page">
         <div class="results-header">
-            <h1 class="results-title">Results Page</h1>
+            <h1 class="results-title">Mirai</h1>
             <NuxtLink to="/" class="tohome">Go back to Home</NuxtLink>
         </div>
         <div class="results-content">

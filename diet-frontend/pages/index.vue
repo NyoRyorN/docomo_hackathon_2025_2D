@@ -52,7 +52,7 @@ onMounted(() => {
       <div class="container">
         <div class="row">
           <div class="col-lg-6 col-md-7 d-flex justify-content-center flex-column">
-            <h1 class="text-white mb-4 hero-title">健康状態向上</h1>
+            <h1 class="text-white mb-4 hero-title">MiraiMirror</h1>
             <p class="text-white opacity-8 lead pe-5 me-5 hero-description">
               あなたの健康をサポートします。今すぐ始めましょう！
             </p>
