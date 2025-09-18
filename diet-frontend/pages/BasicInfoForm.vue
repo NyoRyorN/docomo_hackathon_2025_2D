@@ -225,7 +225,7 @@
                 alert('データ送信完了しました！')
 
                 // main画面に遷移
-                await navigateTo('/')
+                await navigateTo('/DailyLogForm')
 
             } catch (apiError) {
                 // APIが利用できない場合はダミーデータで続行
@@ -237,10 +237,10 @@
                 }
 
                 console.log('Using dummy response:', dummyResponse)
-                alert('送信完了 ダミーデータ\nホーム画面に戻ります')
+                alert('送信完了 ダミーデータ')
 
                 // 結果画面に遷移
-                await navigateTo('/')
+                await navigateTo('/DailyLogForm')
             }
 
         } catch (err) {
