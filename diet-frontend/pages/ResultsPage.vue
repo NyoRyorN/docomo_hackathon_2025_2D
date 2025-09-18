@@ -7,9 +7,9 @@ const showFatAtFutureImage = ref(true)
     <NuxtLayout name="default">
         <div class="results-main">
             <div class="results-images">
-                <ImageFrame imageUrl="/images/Before.jpg" class="before-image"/>
-                <ImageFrame v-if="showFatAtFutureImage" imageUrl="/images/After.jpg" class="after-image"/>
-                <ImageFrame v-else imageUrl="/images/goodAfter.jpg" class="after-image"/>
+                <ImageFrame imageUrl="/images/Before.jpg" class="before-image" showImageType="before"/>
+                <ImageFrame v-if="showFatAtFutureImage" class="after-image" imageUrl="/images/After.jpg" showImageType="after"/>
+                <ImageFrame v-else class="after-image" imageUrl="/images/goodAfter.jpg" showImageType="ideal"/>
             </div>
             <div class="recommendations">
                 <div class="score-container">
@@ -25,7 +25,7 @@ const showFatAtFutureImage = ref(true)
                     <li>十分な睡眠を確保する</li>
                     <li>ストレス管理を行う</li>
                 </ul>
-                <div class="desired_buttons">
+                <div class="ideal_buttons">
                     <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
                         理想の自分へ
                     </NuxtLink>
@@ -128,7 +128,7 @@ const showFatAtFutureImage = ref(true)
     }
 }
 
-.desired_buttons {
+.ideal_buttons {
     position: absolute;
     bottom: 20px;
     right: 20px;
