@@ -2,7 +2,7 @@
 データベース管理（最小実装・ハッカソン用, 画像はURL保存）
 作成者：関澤和希
 初版：2025/09/17
-更新：2025/09/18（save_generated_answerは result dict を受け取る／画像はURL）
+更新：2025/09/18（数値はすべて str / 既存テーブルの修正は行わない）
 
 概要
 - save_init_list: 固定情報の保存（プロフィール画像はURL）
@@ -11,22 +11,20 @@
 - add_meal_log: 食事/体重/睡眠ログの追加（画像はURL）
 
 注意
-- RDS接続情報は環境変数で設定してください（DB_HOST, DB_USER, DB_PASSWORD, DB_NAME）。
-- 本番では AWS Secrets Manager / IAM auth 等の利用を推奨。(デモ用にRDSの構成は簡略化)
+- RDS接続情報は環境変数で設定（DB_HOST, DB_USER, DB_PASSWORD, DB_NAME）
 """
 
 import os
-from datetime import datetime, timedelta
 import pymysql
 
 # =============================
-# 接続 & 最小オートマイグレーション
+# 接続
 # =============================
 def _get_conn():
     return pymysql.connect(
         host=os.getenv("DB_HOST", "db-python.cnphhi3k6w2n.ap-northeast-1.rds.amazonaws.com"),
         user=os.getenv("DB_USER", "admin"),
-        password=os.getenv("DB_PASSWORD", "Masters1312q"),  # ← 環境変数で渡す。本番はSecret Manager推奨
+        password=os.getenv("DB_PASSWORD", "Masters1312q"),  # 本番はSecret Manager推奨
         database=os.getenv("DB_NAME", "pythondb"),
         autocommit=True,
         cursorclass=pymysql.cursors.DictCursor,
@@ -34,16 +32,15 @@ def _get_conn():
 
 def _ensure_tables():
     """
-    - 新規作成時はURL列でテーブル生成
-    - 既存にBLOB列があってもURL列を追加し、可能ならBLOB列をDROP（データ移行は別途）
-    - MySQLのバージョンや権限で IF [NOT] EXISTS が使えない場合は try/except で黙殺
+    既存テーブルの修正は一切行わず、存在しなければ作成のみ。
+    数値は全て VARCHAR で保持。
     """
     ddl_user = """
     CREATE TABLE IF NOT EXISTS user_profile (
         user_id VARCHAR(64) PRIMARY KEY,
-        height FLOAT NULL,
+        height VARCHAR(32) NULL,
         gender VARCHAR(16) NULL,
-        years INT NULL,
+        years VARCHAR(32) NULL,
         individual_photo_url VARCHAR(1024) NULL,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -54,9 +51,9 @@ def _ensure_tables():
         user_id VARCHAR(64) NOT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         meal_image_url VARCHAR(1024) NULL,
-        weight_kg FLOAT NULL,
+        weight_kg VARCHAR(32) NULL,
         habits TEXT NULL,
-        sleep_hour FLOAT NULL,
+        sleep_hour VARCHAR(32) NULL,
         KEY idx_user_date (user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -65,7 +62,7 @@ def _ensure_tables():
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(64) NOT NULL,
         answer TEXT NULL,
-        score_percent FLOAT NULL,
+        score_percent VARCHAR(32) NULL,
         improvement TEXT NULL,
         future_image_url VARCHAR(1024) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -73,44 +70,19 @@ def _ensure_tables():
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
 
-
-    # 既存テーブルの最小ALTER（URL列追加、旧BLOB列を可能ならDROP）
-    alters = [
-        # user_profile
-        "ALTER TABLE user_profile ADD COLUMN IF NOT EXISTS individual_photo_url VARCHAR(1024) NULL AFTER years",
-        "ALTER TABLE user_profile DROP COLUMN IF EXISTS individual_photo",
-        # meal_log
-        "ALTER TABLE meal_log ADD COLUMN IF NOT EXISTS meal_image_url VARCHAR(1024) NULL AFTER created_at",
-        "ALTER TABLE meal_log DROP COLUMN IF EXISTS meal_image",
-        # generated_answers
-        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS ratio FLOAT NULL AFTER user_id",
-        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS answer TEXT NULL AFTER ratio",
-        "ALTER TABLE generated_answers ADD COLUMN IF NOT EXISTS generated_image_url VARCHAR(1024) NULL AFTER answer",
-        "ALTER TABLE generated_answers DROP COLUMN IF EXISTS result_text",
-        "ALTER TABLE generated_answers DROP COLUMN IF EXISTS result_image",
-        "ALTER TABLE generated_answers DROP COLUMN IF EXISTS result_image_url",
-    ]
-
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(ddl_user)
             cur.execute(ddl_meal)
             cur.execute(ddl_gen)
-            for q in alters:
-                try:
-                    cur.execute(q)
-                except Exception:
-                    # 古いMySQLや権限不足等でIF NOT EXISTS/IF EXISTSが使えない場合は無視
-                    pass
     finally:
         conn.close()
 
-# モジュールimport時に一度だけ作成（失敗しても他処理に影響しない）
+# import 時に一度だけ作成（失敗しても黙殺）
 try:
     _ensure_tables()
 except Exception:
-    # 接続未設定時でも他関数で再挑戦できるよう黙殺
     pass
 
 # =============================
@@ -118,14 +90,14 @@ except Exception:
 # =============================
 def save_init_list(
     user_id: str,
-    height: float | None,
+    height: str | None,
     gender: str | None,
-    years: int | None,
+    years: str | None,
     individual_photo_url: str | None = None
 ) -> int:
     """
     固定情報の保存（UPSERT、画像はURL）
-    戻り値: 0（成功時）
+    すべて文字列で保存
     """
     _ensure_tables()
     sql = """
@@ -144,12 +116,9 @@ def save_init_list(
         return 0
     finally:
         conn.close()
-    return True
 
 def fetch_info(user_id: str):
-    """
-    初期プロフィール + 直近7日分のログ（1日1件・最新）を返す
-    """
+    """初期プロフィール + 直近7回分のログ（1日1件・最新）を返す"""
     init = fetch_init_info(user_id)
     past = fetch_past_info(user_id)
     return init, past
@@ -159,7 +128,6 @@ def fetch_init_info(user_id: str):
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
-            # user_idで1件取得
             cur.execute(
                 "SELECT height, gender, years, individual_photo_url FROM user_profile WHERE user_id=%s",
                 (user_id,)
@@ -167,27 +135,19 @@ def fetch_init_info(user_id: str):
             row = cur.fetchone()
             if row:
                 return {
-                    "height": row.get("height"),
+                    "height": row.get("height"),                 # str | None
                     "gender": row.get("gender"),
-                    "years": row.get("years"),
+                    "years": row.get("years"),                   # str | None
                     "individual_photo_url": row.get("individual_photo_url"),
                 }
-            # 未登録時のデフォルト
-            return {
-                "height": None,
-                "gender": None,
-                "years": None,
-                "individual_photo_url": None
-            }
+            return {"height": None, "gender": None, "years": None, "individual_photo_url": None}
     finally:
         conn.close()
-    return True
 
 def fetch_past_info(user_id: str):
     """
-    直近の7回分を返却。
-    最新から順に取得し、7件未満ならあるだけ返す。
-    返却形式: dict[str, dict], キーは "0_day_ago", "1_day_ago", ... とする。
+    直近の7回分（最新→最大7件）。数値はすべて文字列で返る。
+    返却キー: "0_day_ago", "1_day_ago", ...
     """
     _ensure_tables()
     past: dict[str, dict] = {}
@@ -214,21 +174,20 @@ def fetch_past_info(user_id: str):
                         "user_id": user_id,
                         "created_at": None,
                         "meal_image_url": None,
-                        "weight_kg": None,
+                        "weight_kg": None,  # str|None
                         "habits": None,
-                        "sleep_hour": None
+                        "sleep_hour": None, # str|None
                     }
     finally:
         conn.close()
     return past
-
 
 # =============================
 # 生成結果（result dict 仕様）
 # =============================
 def save_generated_answer(result: dict) -> int:
     """
-    生成結果の保存（置き換え版）
+    生成結果の保存（数値は文字列で保存）
     必須: result['user_id']
     任意: result['answer'], result['score_percent'], result['improvement'] / 'improvement ', result['future_image_url']
     """
@@ -239,26 +198,12 @@ def save_generated_answer(result: dict) -> int:
         raise ValueError("result['user_id'] は必須です。")
 
     answer = result.get("answer")
+    score_percent = result.get("score_percent")  # そのまま文字列想定（数値でも str() で保存可）
+    if score_percent is not None and not isinstance(score_percent, str):
+        score_percent = str(score_percent)
 
-    # score_percent は数値/文字列の両方を許容
-    score_percent = result.get("score_percent")
-    try:
-        if score_percent is not None:
-            score_percent = float(score_percent)
-    except (TypeError, ValueError):
-        score_percent = None
-
-    # "improvement" と "improvement "（末尾スペース）両対応
-    improvement = result.get("improvement")
-    if improvement is None and "improvement " in result:
-        improvement = result.get("improvement ")
-
-    # 画像URLは new: future_image_url を優先
-    future_image_url = (
-        result.get("future_image_url")
-        or result.get("generated_picture")   # 互換キー（もし来る場合）
-        or result.get("generated_image")     # 互換キー（もし来る場合）
-    )
+    improvement = result.get("improvement") or result.get("improvement ")
+    future_image_url = result.get("future_image_url")
 
     sql = """
     INSERT INTO generated_answers (user_id, answer, score_percent, improvement, future_image_url, created_at)
@@ -272,21 +217,17 @@ def save_generated_answer(result: dict) -> int:
     finally:
         conn.close()
 
-
-
 # =============================
 # 入力補助
 # =============================
 def add_meal_log(
     user_id: str,
-    weight_kg: float | None = None,
+    weight_kg: str | None = None,
     habits: str | None = None,
-    sleep_hour: float | None = None,
+    sleep_hour: str | None = None,
     meal_image_url: str | None = None
 ) -> int:
-    """
-    食事/体重/睡眠ログを1件追加（画像はURL）
-    """
+    """食事/体重/睡眠ログを1件追加（画像はURL）"""
     _ensure_tables()
     sql = """
     INSERT INTO meal_log (user_id, meal_image_url, weight_kg, habits, sleep_hour, created_at)
@@ -300,30 +241,32 @@ def add_meal_log(
     finally:
         conn.close()
 
+
 # =============================
 # 簡易テスト
 # =============================
 if __name__ == "__main__":
-    uid = "test_user"
+    uid = "test_user_str"
 
-    # プロフィール保存（URLで）
-    save_init_list(uid, 171.2, "male", 24, "https://example.com/avatar.png")
+    # プロフィール保存（URLで, 数値はstr）
+    save_init_list(uid, "171.2", "male", "24", "https://example.com/avatar.png")
 
-    # 食事ログ（URLで）
+    # 食事ログ（URLで, 数値はstr）
     add_meal_log(
         uid,
-        weight_kg=68.4,
+        weight_kg="68.4",
         habits="夜食控えめ",
-        sleep_hour=6.5,
+        sleep_hour="6.5",
         meal_image_url="https://example.com/meal.jpg"
     )
 
-    # 生成結果（result dict仕様）
+    # 生成結果（result dict仕様, 数値はstr）
     result = {
         "user_id": uid,
-        "ratio": 0.82,
         "answer": "今日の提案：たんぱく質を少し増やしましょう。",
-        "generated_image": "https://example.com/ai_result.png"
+        "score_percent": "82.0",  # ← 文字列でOK（数値でもstrにして保存）
+        "improvement": "間食にヨーグルトを追加",
+        "future_image_url": "https://example.com/ai_result.png"
     }
     save_generated_answer(result)
 
