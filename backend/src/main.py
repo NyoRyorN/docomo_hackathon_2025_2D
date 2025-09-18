@@ -22,59 +22,13 @@ if str(_THIS_DIR) not in sys.path:
     sys.path.append(str(_THIS_DIR))
 
 # -------- ヘルパ：遅延で関数読込（存在しなければ None かエラー） --------
-async def url_to_bytes(
-    url: str,
-    *,
-    timeout: float = 10.0,
-    max_bytes: int = 8 * 1024 * 1024,  # 8MB
-    require_image: bool = True,
-) -> bytes:
-    """
-    画像URL(https://...) または data URL(data:image/png;base64,...) を bytes に変換。
-    - require_image=True のとき Content-Type が image/* でないと 400 を返す
-    - max_bytes を超えたら 413 を返す
-    """
-    if not url:
-        raise HTTPException(status_code=400, detail="URL が空です。")
+async def bytes_to_url(data: bytes, filename: str) -> str:
+    """バイト列を一時的に base64 URL 化して返す（本来は外部ストレージに保存する想定）"""
+    # 簡易的に data: URL 化（小さい画像のみ対応）
+    mime_type = "image/png"  # 適宜変更可
+    b64_data = base64.b64encode(data).decode("utf-8")
+    return f"data:{mime_type};base64,{b64_data}"
 
-    # data URL 対応
-    if url.startswith("data:"):
-        header, data = url.split(",", 1)
-        if require_image and "image" not in header.lower():
-            raise HTTPException(status_code=400, detail="data URL が画像ではありません。")
-        try:
-            if ";base64" in header.lower():
-                content = base64.b64decode(data, validate=True)
-            else:
-                content = urllib.parse.unquote_to_bytes(data)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"data URL のデコードに失敗しました: {e}") from e
-        if len(content) > max_bytes:
-            raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
-        return content
-
-    # 通常の http(s) URL
-    try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            async with client.stream("GET", url) as resp:
-                try:
-                    resp.raise_for_status()
-                except httpx.HTTPStatusError as e:
-                    raise HTTPException(status_code=400, detail=f"画像URLの取得に失敗しました: {e}") from e
-
-                ctype = resp.headers.get("content-type", "")
-                if require_image and "image" not in ctype.lower():
-                    raise HTTPException(status_code=400, detail=f"URLは画像ではありません: {ctype or 'unknown'}")
-
-                buf = bytearray()
-                async for chunk in resp.aiter_bytes():
-                    buf.extend(chunk)
-                    if len(buf) > max_bytes:
-                        raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
-                return bytes(buf)
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=400, detail=f"画像URLへ接続できませんでした: {e}") from e
 
 # =========================
 #  Pydantic モデル
@@ -102,7 +56,7 @@ class AnswerRequest(BaseModel):
     weight: Optional[int] = Field(None, description="体重（任意）")                 # ← str に変更
     exercise_time: Optional[int] = Field(None, description="運動時間（分、任意）") # ← str に変更
     sleep_time: Optional[int] = Field(None, description="睡眠時間（時間、任意）")   # ← str に変更
-    meal_image_url: Optional[str] = Field(None, description="食事画像のURL（必須、jpg/png等）")
+    picture: Optional[str] = Field(None, description="食事画像のURL（必須、jpg/png等）")
 
 class AnswerResponse(BaseModel):
     """生成された回答を返す"""
@@ -160,7 +114,7 @@ def init_main() -> FastAPI:
 
     # ========= 役割 (2) 画像URL→過去取得→回答生成→保存→返却 =========
     @app.post("/generate-answer", response_model=AnswerResponse, tags=["generate"])
-    def generate_from_images(req: AnswerRequest) -> AnswerResponse:
+    async def generate_from_images(req: AnswerRequest) -> AnswerResponse:
         try:
             #データ保存
             save_past_info(
@@ -168,6 +122,7 @@ def init_main() -> FastAPI:
                 weight_kg=req.weight,
                 habits=req.exercise_time,
                 sleep_hour=req.sleep_time,
+                meal_image_url=req.picture
             )
 
             # (a) 過去情報（必要なら取得）
@@ -177,12 +132,8 @@ def init_main() -> FastAPI:
             init, past = fetch_info(user_id=req.name)
 
             # (b) 画像URL→バイト列（必須の食事画像 / 顔はあれば）
-            meal_bytes = url_to_bytes(req.picture, require_image=True)
-
-            face_bytes = None
-            face_url = init.get("individual_photo_url")
-            if face_url:
-                face_bytes = url_to_bytes(req.face_url, require_image=True)
+            meal_bytes = req.picture
+            face_bytes = init.get("individual_photo_url")
 
             # init/past から画像URLは削除（generate には渡さない想定）
             init.pop("individual_photo_url", None)
@@ -199,7 +150,6 @@ def init_main() -> FastAPI:
                 init["sleep_hour"] = req.sleep_time
 
             # (c) 回答生成（必須）
-
             raw_result = generate_answer(meal_bytes, face_bytes, past, init)
 
             # dict 以外でも壊れないように整形
@@ -218,7 +168,7 @@ def init_main() -> FastAPI:
                 score_percent=result.get("score_percent"),   # ← str を想定（数値でもPydanticがstr変換）
                 improvement=result.get("improvement") or result.get("improvement "),
                 future_image_url=result.get("future_image_url"),
-                current_image_url=face_url,
+                current_image_url=bytes_to_url(meal_bytes, "meal.png"),
             )
 
         except HTTPException:
