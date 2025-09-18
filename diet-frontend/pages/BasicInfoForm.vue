@@ -179,7 +179,7 @@
         const reader = new FileReader();
         reader.onload = () => {
             // "data:image/jpeg;base64,..." の形式 → "," 以降を抽出
-            const base64Data = reader.result.split(',')[1];
+            const base64Data = reader.result;
             form.picture = base64Data; // ここに Base64 を格納
             previewUrl.value = URL.createObjectURL(file); // 画像プレビューはそのまま
         };

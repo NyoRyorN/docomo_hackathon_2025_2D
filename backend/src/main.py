@@ -16,6 +16,61 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+async def url_to_bytes(
+    url: str,
+    *,
+    timeout: float = 10.0,
+    max_bytes: int = 8 * 1024 * 1024,  # 8MB
+    require_image: bool = True,
+) -> bytes:
+    """
+    画像URL(https://...) または data URL(data:image/png;base64,...) を bytes に変換。
+    - require_image=True のとき Content-Type が image/* でないと 400 を返す
+    - max_bytes を超えたら 413 を返す
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="URL が空です。")
+
+    # data URL 対応
+    if url.startswith("data:"):
+        header, data = url.split(",", 1)
+        if require_image and "image" not in header.lower():
+            raise HTTPException(status_code=400, detail="data URL が画像ではありません。")
+        try:
+            if ";base64" in header.lower():
+                content = base64.b64decode(data, validate=True)
+            else:
+                content = urllib.parse.unquote_to_bytes(data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"data URL のデコードに失敗しました: {e}") from e
+        if len(content) > max_bytes:
+            raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
+        return content
+
+    # 通常の http(s) URL
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            async with client.stream("GET", url) as resp:
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    raise HTTPException(status_code=400, detail=f"画像URLの取得に失敗しました: {e}") from e
+
+                ctype = resp.headers.get("content-type", "")
+                if require_image and "image" not in ctype.lower():
+                    raise HTTPException(status_code=400, detail=f"URLは画像ではありません: {ctype or 'unknown'}")
+
+                buf = bytearray()
+                async for chunk in resp.aiter_bytes():
+                    buf.extend(chunk)
+                    if len(buf) > max_bytes:
+                        raise HTTPException(status_code=413, detail="画像サイズが大きすぎます。")
+                return bytes(buf)
+
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=400, detail=f"画像URLへ接続できませんでした: {e}") from e
+
+
 # ---- import path 簡易調整（src 直下モジュールを import しやすく） ----
 _THIS_DIR = pathlib.Path(__file__).resolve().parent
 if str(_THIS_DIR) not in sys.path:
@@ -132,12 +187,14 @@ def init_main() -> FastAPI:
             init, past = fetch_info(user_id=req.name)
 
             # (b) 画像URL→バイト列（必須の食事画像 / 顔はあれば）
-            meal_bytes = url_to_bytes(req.picture, require_image=True)
+            meal_bytes = await url_to_bytes(req.picture, require_image=True)
 
+            # 仮設定：face_bytesに食事と同じ画像を入れている
             face_bytes = None
             face_url = init.get("individual_photo_url")
             if face_url:
-                face_bytes = url_to_bytes(req.face_url, require_image=True)
+                face_bytes = await url_to_bytes(req.face_url, require_image=True)
+            face_bytes = await url_to_bytes(req.picture, require_image=True)
 
             # init/past から画像URLは削除（generate には渡さない想定）
             init.pop("individual_photo_url", None)
@@ -162,6 +219,7 @@ def init_main() -> FastAPI:
             else:
                 result = {"answer": raw_result}
 
+            result['user_id'] = req.name
             # (d) 生成結果を保存（存在すれば）
             save_generated_answer(result)
 
@@ -172,7 +230,7 @@ def init_main() -> FastAPI:
                 score_percent=result.get("score_percent"),   # ← str を想定（数値でもPydanticがstr変換）
                 improvement=result.get("improvement") or result.get("improvement "),
                 future_image_url=result.get("future_image_url"),
-                current_image_url=bytes_to_url(meal_bytes, "meal.png"),
+                current_image_url= await bytes_to_url(meal_bytes, "meal.png"),
             )
 
         except HTTPException:
