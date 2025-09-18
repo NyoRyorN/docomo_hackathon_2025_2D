@@ -57,6 +57,24 @@ onMounted(() => {
                 <div>
                     {{ apiResponse?.improvement }}
                 </div>
+                <h2>おすすめサービス</h2>
+                <div class="ad">
+                    <a href="https://health.docomo.ne.jp/" target="_blank" rel="noopener noreferrer" class="service-item">
+                        dヘルスケア - ドコモの健康サポートサービス
+                    </a>
+                    <a href="https://nosh.jp/lp/delivery17?utm_source=google&utm_medium=cpc&utm_campaign=nosh2&utm_content=nosh&utm_term=nosh&cq_cmp=22735495806&cq_con=182391491712&cq_term=nosh&cq_med=cpc&cq_plac=&cq_net=g&gad_source=1&gad_campaignid=22735495806&gbraid=0AAAAADALBeEH0IB3HZcztghAGpg5kwyWL&gclid=Cj0KCQjw267GBhCSARIsAOjVJ4GjfeRfxBNy-Xv1pZ56LVR7dFn_0S0NHcI5MQdNK52lmiHYeE0tNaQaApqMEALw_wcB" target="_blank" rel="noopener noreferrer" class="service-item">
+                        nosh - 糖質制限の食事宅配サービス
+                    </a>
+                    <a href="https://calomeal.com/" target="_blank" rel="noopener noreferrer" class="service-item">
+                        カロミル - 食事記録と栄養管理
+                    </a>
+                    <a href="https://www.myfitnesspal.com/" target="_blank" rel="noopener noreferrer" class="service-item">
+                        MyFitnessPal - カロリー計算とフィットネス追跡
+                    </a>
+                    <a href="https://www.noom.com/" target="_blank" rel="noopener noreferrer" class="service-item">
+                        Noom - 行動変容を促すダイエットプログラム
+                    </a>
+                </div>
 
                 <!-- <div class="ideal_buttons">
                     <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
@@ -161,14 +179,44 @@ onMounted(() => {
     }
 }
 
-.ideal_buttons {
+.ad {
+    margin-top: 20px;
+    padding: 10px;
+    background-color: #f0f8ff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+.service-list {
+    list-style-type: disc;
+    padding-left: 20px;
+}
+.service-item {
+    display: block;
+    margin-bottom: 5px;
+    background-color: antiquewhite;
+    text-align: center;
+    text-decoration: none;
+    color: inherit;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+    text-align: center;
+    font-weight: bold;
+}
+
+.service-item:hover {
+    background-color: #00bcd4;
+    color: white;
+}
+
+/* .ideal_buttons {
     position: absolute;
     bottom: 20px;
     right: 20px;
     width: auto;
     display: flex;
     justify-content: flex-end;
-}
+} */
 
 .navigator_link {
     display: inline-block;
