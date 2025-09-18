@@ -38,7 +38,7 @@ onMounted(() => {
 })
 </script>
 
-<template class="index-page" style="margin: -8px;">
+<template class="index-page">
     <div 
       class="page-header min-vh-100"
       :style="{
@@ -57,7 +57,7 @@ onMounted(() => {
               あなたの健康をサポートします。今すぐ始めましょう！
             </p>
             <div class="buttons">
-                <NuxtLink to="/foo" class="navigator_link">
+                <NuxtLink to="/ResultsPage" class="navigator_link">
                     始める
                 </NuxtLink>
                 <NuxtLink to="/BasicInfoForm" class="navigator_link">
@@ -83,10 +83,12 @@ onMounted(() => {
 }
 /* ヒーローセクション関連のスタイル */
 .page-header {
+  position: fixed;
+  top: 0;
+  left: 0;
   margin: 0;
-  height: calc(100vh - 16px);
-  width: calc(100vw - 16px);
-  position: relative;
+  height: 100vh;
+  width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;
