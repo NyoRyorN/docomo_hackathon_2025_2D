@@ -151,14 +151,15 @@ def init_main() -> FastAPI:
     # ========= 役割 (1) init リスト保存 =========
     # DB関数は他で作る前提：存在すれば呼ぶ／無ければノーオペでOK
     @app.post("/init", response_model=InitResponse, tags=["init"])
-    def store_init_list(req: InitRequest) -> InitResponse:
+    async def store_init_list(req: InitRequest) -> InitResponse:
         try:
+            photo_bytes = await url_to_bytes(req.picture)
             save_init_list(
                 user_id=req.name,
                 height=req.height,
                 gender=req.gender,
                 years=req.age,
-                individual_photo_url=req.picture
+                individual_photo_url=photo_bytes
             )
             # 関数が無い場合は何もしないで成功扱い
             return InitResponse(ok=True, stored_count=1)
@@ -190,11 +191,7 @@ def init_main() -> FastAPI:
             meal_bytes = await url_to_bytes(req.picture, require_image=True)
 
             # 仮設定：face_bytesに食事と同じ画像を入れている
-            face_bytes = None
-            face_url = init.get("individual_photo_url")
-            if face_url:
-                face_bytes = await url_to_bytes(req.face_url, require_image=True)
-            face_bytes = await url_to_bytes(req.picture, require_image=True)
+            face_bytes = init.get("individual_photo_url")
 
             # init/past から画像URLは削除（generate には渡さない想定）
             init.pop("individual_photo_url", None)

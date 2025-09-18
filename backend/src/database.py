@@ -33,7 +33,6 @@ def _get_conn():
 def _ensure_tables():
     """
     既存テーブルの修正は一切行わず、存在しなければ作成のみ。
-    数値は全て VARCHAR で保持。
     """
     ddl_user = """
     CREATE TABLE IF NOT EXISTS user_profile (
@@ -41,7 +40,7 @@ def _ensure_tables():
         height INT NULL,
         gender VARCHAR(16) NULL,
         years INT NULL,
-        individual_photo_url VARCHAR(1024) NULL,
+        individual_photo_url MEDIUMBLOB NULL,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -79,6 +78,7 @@ def _ensure_tables():
     finally:
         conn.close()
 
+
 # import 時に一度だけ作成（失敗しても黙殺）
 try:
     _ensure_tables()
@@ -93,7 +93,7 @@ def save_init_list(
     height: str | None,
     gender: str | None,
     years: str | None,
-    individual_photo_url: str | None = None
+    individual_photo_url: bytes | None = None
 ) -> int:
     """
     固定情報の保存（UPSERT、画像はURL）
