@@ -227,7 +227,7 @@ def init_main() -> FastAPI:
                 score_percent=result.get("score_percent"),   # ← str を想定（数値でもPydanticがstr変換）
                 improvement=result.get("improvement") or result.get("improvement "),
                 future_image_url=result.get("future_image_url"),
-                current_image_url= await bytes_to_url(meal_bytes, "meal.png"),
+                current_image_url= await bytes_to_url(face_bytes, "meal.png"),
             )
 
         except HTTPException:
