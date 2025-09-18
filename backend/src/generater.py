@@ -236,7 +236,7 @@ def generate_answer(meal_image_bytes: bytes, face_image_bytes: bytes,
 
 import pathlib
 import time
-import base64
+
 import json
 
 if __name__ == "__main__":
