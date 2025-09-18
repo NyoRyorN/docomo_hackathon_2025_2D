@@ -85,10 +85,10 @@ class InitRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="セッション識別子（任意）")
 
     name: Optional[str] = Field(None, description="ユーザ名（任意）")
-    age: Optional[str] = Field(None, description="年齢（任意、DBでは years に対応）")          # ← str に変更
-    height: Optional[str] = Field(None, description="身長（任意）")                           # ← str に変更
+    age: Optional[int] = Field(None, description="年齢（任意、DBでは years に対応）")          # ← str に変更
+    height: Optional[int] = Field(None, description="身長（任意）")                           # ← str に変更
     gender: Optional[str] = Field(None, description="性別（任意）")
-    weight_ideal: Optional[str] = Field(None, description="理想体重（任意）")                # ← str に変更
+    weight_ideal: Optional[int] = Field(None, description="理想体重（任意）")                # ← str に変更
     picture: Optional[str] = Field(None, description="プロフィール画像URL（任意）")
 
 

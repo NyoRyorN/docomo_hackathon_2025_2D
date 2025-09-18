@@ -24,7 +24,6 @@
                                 class="form-control mb-3"
                                 accept="image/*"
                                 @change="handleFileUpload"
-                                required
                             />
 
                             <!-- プレビュー領域 -->
@@ -53,7 +52,7 @@
                                 type="text"
                                 placeholder="名前を入力してください"
                                 v-model="form.name"
-                                required
+                                
                             />
                             </div>
 
@@ -68,7 +67,6 @@
                                     max="300"
                                     placeholder="身長を入力してください"
                                     v-model="form.height"
-                                    required
                                 />
                                 <span class="input-group-text">cm</span>
                                 </div>
@@ -85,7 +83,6 @@
                                     max="200"
                                     placeholder="年齢を入力してください"
                                     v-model="form.age"
-                                    required
                                 />
                                 <span class="input-group-text">歳</span>
                                 </div>
@@ -93,7 +90,7 @@
 
                             <div class="form-group my-3">
                                 <label for="gender">性別</label>
-                                <select id="gender" class="form-select" v-model="form.gender" required>
+                                <select id="gender" class="form-select" v-model="form.gender">
                                     <option disabled value="">選択してください</option>
                                     <option value="male">男性</option>
                                     <option value="female">女性</option>
@@ -110,7 +107,7 @@
                                     type="number"
                                     placeholder="1ヶ月後に目指す体重を入力してください"
                                     v-model="form.weight_ideal"
-                                    required
+                                    
                                 />
                                 <span class="input-group-text">kg</span>
                                 </div>
@@ -166,6 +163,7 @@
             height: "",
             gender: "",
             weight_ideal: "",
+            picture: "",
             // exercise_time: "",
             // sleep_time: "",
             user_id: "user123",   // 任意で付与
@@ -175,11 +173,17 @@
 
     // 写真表示
     function handleFileUpload(event) {
-        const file = event.target.files[0]
-        if (file) {
-            form.picture = file
-            previewUrl.value = URL.createObjectURL(file)
-        }
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            // "data:image/jpeg;base64,..." の形式 → "," 以降を抽出
+            const base64Data = reader.result.split(',')[1];
+            form.picture = base64Data; // ここに Base64 を格納
+            previewUrl.value = URL.createObjectURL(file); // 画像プレビューはそのまま
+        };
+        reader.readAsDataURL(file);
     }
 
     // submit
@@ -188,12 +192,12 @@
 
     const handleSubmit = async () => {
         try {
-            for (const key in form) {
-                if (!form[key]) {
-                    alert("全ての項目を入力してください");
-                    return; // 空欄があれば送信中止
-                }
-            }
+            // for (const key in form) {
+            //     if (!form[key]) {
+            //         alert("全ての項目を入力してください");
+            //         return; // 空欄があれば送信中止
+            //     }
+            // }
 
             isLoading.value = true
 
@@ -214,10 +218,14 @@
             console.log('Sending request to API...')
 
             try {
+                console.log(JSON.stringify(form))
                 // 本番のAPI呼び出し
                 const response = await $fetch('http://127.0.0.1:8000/init', {
                     method: 'POST',
-                    body: formData
+                    body: JSON.stringify(form), // JSONで送信
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                 })
 
                 // 成功時の処理

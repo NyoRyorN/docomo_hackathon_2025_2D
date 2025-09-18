@@ -27,104 +27,117 @@ import { navigateTo } from '#app'
 
     import { reactive, ref } from "vue"
 
-const form = reactive({
+    const form = reactive({
+        name: "user",
         weight: "",
         exercise_time: "",
         sleep_time: "",
+        picture: "",
     })
 
     const previewUrl = ref(null)
     const isLoading = ref(false)
 
+    // 写真表示
     function handleFileUpload(event) {
-    const file = event.target.files[0]
-    if (file) {
-        form.picture = file
-        previewUrl.value = URL.createObjectURL(file)
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            // "data:image/jpeg;base64,..." の形式 → "," 以降を抽出
+            const base64Data = reader.result.split(',')[1];
+            form.picture = base64Data; // ここに Base64 を格納
+            previewUrl.value = URL.createObjectURL(file); // 画像プレビューはそのまま
+        };
+        reader.readAsDataURL(file);
     }
-    }
 
-async function handleSubmit() {
-    try {
-        // 画像が選択されているかチェック
-        if (!form.picture) {
-            alert('画像を選択してください')
-            return
-        }
-
-        isLoading.value = true
-
-        // FormDataを作成してファイルとフォームデータを送信
-        const formData = new FormData()
-        formData.append('meal_image', form.picture)
-        formData.append('face_image', form.picture) // 現在は同じ画像を使用
-        formData.append('user_id', 'user_123') // 適宜ユーザーIDを設定
-        formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
-        
-        // 追加のフォームデータ
-        formData.append('weight', form.weight)
-        formData.append('exercise_time', form.exercise_time)
-        formData.append('sleep_time', form.sleep_time)
-
-        console.log('Sending request to API...')
-        
+    async function handleSubmit() {
         try {
-            // 本番のAPI呼び出し
-            const response = await $fetch('http://127.0.0.1:8000/generate-answer', {
-                method: 'POST',
-                body: formData
-            })
+            // 画像が選択されているかチェック
+            // if (!form.picture) {
+            //     alert('画像を選択してください')
+            //     return
+            // }
+
+            isLoading.value = true
+
+            // FormDataを作成してファイルとフォームデータを送信
+            // const formData = new FormData()
+            // formData.append('meal_image', form.picture)
+            // formData.append('face_image', form.picture) // 現在は同じ画像を使用
+            // formData.append('user_id', 'user_123') // 適宜ユーザーIDを設定
+            // formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
             
-            // 成功時の処理
-            console.log('API Response:', response)
-            alert('解析が完了しました！')
+            // // 追加のフォームデータ
+            // formData.append('weight', form.weight)
+            // formData.append('exercise_time', form.exercise_time)
+            // formData.append('sleep_time', form.sleep_time)
+
+            console.log('Sending request to API...')
             
-            // 結果画面に遷移
-            await navigateToNext(response)
-            
-        } catch (apiError) {
-            // APIが利用できない場合はダミーデータで続行
-            console.warn('API呼び出しに失敗しました。ダミーデータで続行します:', apiError)
-            
-            const dummyResponse = {
-                answer: "ダミーの解析結果です",
-                score_percent: 75,
-                improvement: "ダミーの改善案です",
-                future_image_url: null,
-                current_image_url: null,
-                meta: {
-                    user_id: "user_123",
-                    weight: form.weight,
-                    exercise_time: form.exercise_time,
-                    sleep_time: form.sleep_time
+            try {
+                console.log(JSON.stringify(form))
+                // 本番のAPI呼び出し
+                const response = await $fetch('http://127.0.0.1:8000/generate-answer', {
+                    method: 'POST',
+                    body: JSON.stringify(form), // JSONで送信
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                })
+                
+                // 成功時の処理
+                console.log('API Response:', response)
+                alert('解析が完了しました！')
+                
+                // 結果画面に遷移
+                await navigateToNext(response)
+                
+            } catch (apiError) {
+                // APIが利用できない場合はダミーデータで続行
+                console.warn('API呼び出しに失敗しました。ダミーデータで続行します:', apiError)
+                
+                const dummyResponse = {
+                    answer: "ダミーの解析結果です",
+                    score_percent: 75,
+                    improvement: "ダミーの改善案です",
+                    future_image_url: null,
+                    current_image_url: null,
+                    meta: {
+                        user_id: "user_123",
+                        weight: form.weight,
+                        exercise_time: form.exercise_time,
+                        sleep_time: form.sleep_time
+                    }
                 }
+                
+                console.log('Using dummy response:', dummyResponse)
+                alert('解析が完了しました！（ダミーデータ）')
+                
+                // 結果画面に遷移
+                await navigateToNext(dummyResponse)
             }
             
-            console.log('Using dummy response:', dummyResponse)
-            alert('解析が完了しました！（ダミーデータ）')
+        } catch (err) {
+            console.error('Request failed:', err)
             
-            // 結果画面に遷移
-            await navigateToNext(dummyResponse)
+            // より詳細なエラー情報を表示
+            let errorMessage = 'リクエストに失敗しました'
+            if (err.response) {
+                console.error('Response status:', err.response.status)
+                console.error('Response data:', err.response._data)
+                errorMessage = `サーバーエラー (${err.response.status}): ${err.response._data?.detail || err.response.statusText}`
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+            
+            alert(errorMessage)
+        } finally {
+            isLoading.value = false
         }
-        
-    } catch (err) {
-        console.error('Request failed:', err)
-        
-        // より詳細なエラー情報を表示
-        let errorMessage = 'リクエストに失敗しました'
-        if (err.response) {
-            console.error('Response status:', err.response.status)
-            console.error('Response data:', err.response._data)
-            errorMessage = `サーバーエラー (${err.response.status}): ${err.response._data?.detail || err.response.statusText}`
-        } else if (err.message) {
-            errorMessage = err.message
-        }
-        
-        alert(errorMessage)
-    } finally {
-        isLoading.value = false
     }
-}
 
     // 背景画像
     import { onMounted, onUnmounted, nextTick } from "vue";
@@ -198,7 +211,6 @@ async function handleSubmit() {
                                 class="form-control mb-3"
                                 accept="image/*"
                                 @change="handleFileUpload"
-                                required
                             />
 
                             <!-- プレビュー領域 -->
@@ -229,7 +241,6 @@ async function handleSubmit() {
                                         type="text"
                                         placeholder="今日の体重を入力してください"
                                         v-model="form.weight"
-                                        required
                                     />
                                     <span class="input-group-text">kg</span>
                                 </div>
@@ -246,7 +257,6 @@ async function handleSubmit() {
                                         max="24"
                                         placeholder="今日の運動時間を入力してください"
                                         v-model="form.exercise_time"
-                                        required
                                     />
                                     <span class="input-group-text">時間</span>
                                 </div>
@@ -264,7 +274,6 @@ async function handleSubmit() {
                                         max="24"
                                         placeholder="昨日の睡眠時間を入力してください"
                                         v-model="form.sleep_time"
-                                        required
                                     />
                                     <span class="input-group-text">時間</span>
                                 </div>
