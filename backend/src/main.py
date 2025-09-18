@@ -95,10 +95,10 @@ class InitRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="セッション識別子（任意）")
 
     name: Optional[str] = Field(None, description="ユーザ名（任意）")
-    age: Optional[int] = Field(None, description="年齢（任意、DBでは years に対応）")
-    height: Optional[float] = Field(None, description="身長（任意）")
+    age: Optional[str] = Field(None, description="年齢（任意、DBでは years に対応）")          # ← str に変更
+    height: Optional[str] = Field(None, description="身長（任意）")                           # ← str に変更
     gender: Optional[str] = Field(None, description="性別（任意）")
-    weight_ideal: Optional[float] = Field(None, description="理想体重（任意）")
+    weight_ideal: Optional[str] = Field(None, description="理想体重（任意）")                # ← str に変更
     picture: Optional[str] = Field(None, description="プロフィール画像URL（任意）")
 
 
@@ -110,7 +110,7 @@ class AnswerResponse(BaseModel):
     """生成された回答を返す"""
     ok: bool
     answer: Union[str, Dict[str, Any]] = Field(..., description="生成された回答（文字列 or 詳細辞書）")
-    score_percent: Optional[float] = Field(None, description="スコア（%）")
+    score_percent: Optional[str] = Field(None, description="スコア（%）")                     # ← str に変更
     improvement: Optional[str] = Field(None, description="改善点（文字列）")
     future_image_url: Optional[str] = Field(None, description="将来予測画像のURL（任意）")
     current_image_url: Optional[str] = Field(None, description="現在の画像のURL（任意）")
@@ -166,9 +166,9 @@ def init_main() -> FastAPI:
     @app.post("/generate-answer", response_model=AnswerResponse, tags=["generate"])
     async def generate_from_images(
         name: str = Form(..., description="ユーザ名（user_idとして利用）"),
-        weight: Optional[float] = Form(None, description="体重"),
-        exercise_time: Optional[float] = Form(None, description="運動時間（分）"),
-        sleep_time: Optional[float] = Form(None, description="睡眠時間（時間）"),
+        weight: Optional[str] = Form(None, description="体重"),                 # ← str に変更
+        exercise_time: Optional[str] = Form(None, description="運動時間（分）"), # ← str に変更
+        sleep_time: Optional[str] = Form(None, description="睡眠時間（時間）"),   # ← str に変更
         picture: str = Form(..., description="食事画像のURL（jpg/png等）"),
     ) -> AnswerResponse:
         try:
@@ -198,7 +198,7 @@ def init_main() -> FastAPI:
                 if isinstance(v, dict):
                     v.pop("meal_image_url", None)
 
-            # init に直近の値を注入
+            # init に直近の値を注入（すべて文字列）
             if weight is not None:
                 init["weight_kg"] = weight
             if exercise_time is not None:
@@ -230,13 +230,14 @@ def init_main() -> FastAPI:
                 except Exception as se:
                     logger.warning("save_generated_answer failed but continue: %s", se)
 
-            # (e) 返却（answer は必須なので None フォールバック）
+            # (e) 返却（score_percent は str、answer は必須）
             return AnswerResponse(
                 ok=True,
-                answer=result.get("answer") if result.get("answer") is not None else "",
-                score_percent=result.get("score_percent"),
+                answer=result.get("answer"),
+                score_percent=result.get("score_percent"),   # ← str を想定（数値でもPydanticがstr変換）
                 improvement=result.get("improvement") or result.get("improvement "),
                 future_image_url=result.get("future_image_url"),
+                current_image_url=face_url,
             )
 
         except HTTPException:
