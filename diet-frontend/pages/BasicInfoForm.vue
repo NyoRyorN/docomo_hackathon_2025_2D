@@ -165,9 +165,9 @@
             age: "",
             height: "",
             gender: "",
-            weight: "",
-            exercise_time: "",
-            sleep_time: "",
+            weight_ideal: "",
+            // exercise_time: "",
+            // sleep_time: "",
             user_id: "user123",   // 任意で付与
             session_id: "sess001" // 任意で付与
         });

@@ -182,9 +182,9 @@ async function handleSubmit() {
         formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
         
         // 追加のフォームデータ
-        formData.append('weight', form.weight)
-        formData.append('exercise_time', form.exercise_time)
-        formData.append('sleep_time', form.sleep_time)
+        // formData.append('weight', form.weight)
+        // formData.append('exercise_time', form.exercise_time)
+        // formData.append('sleep_time', form.sleep_time)
 
         console.log('Sending request to API...')
         
