@@ -3,7 +3,7 @@
         <ClientOnly>
             <div id="background" style="width: 100%; height: 100vh; position: fixed; top: 0; left: 0; z-index: -1;"></div>
         </ClientOnly>
-        <div class="card mx-auto my-5 shadow-lg" style="width: 75%;">
+        <div class="card mx-auto my-5 shadow-lg w-75" style="width: 75%;">
             <div class="card-body">    
                 <h3 class="card-title text-center">
                     今日のことを教えてください
