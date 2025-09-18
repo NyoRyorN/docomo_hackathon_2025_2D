@@ -136,7 +136,7 @@
 
 <script setup>
     // bootstrap import部分
-    import { useHead } from '#app'
+    import { useHead, navigateTo } from '#app'
     useHead({
         link: [
             {
@@ -165,9 +165,9 @@
             age: "",
             height: "",
             gender: "",
-            weight: "",
-            exercise_time: "",
-            sleep_time: "",
+            weight_ideal: "",
+            // exercise_time: "",
+            // sleep_time: "",
             user_id: "user123",   // 任意で付与
             session_id: "sess001" // 任意で付与
         });
@@ -184,14 +184,84 @@
 
     // submit
     const responseData = ref(null);
+    const isLoading = ref(false)
+
     const handleSubmit = async () => {
-        //alert(`お名前: ${form.name}\n身長: ${form.height}cm\n年齢: ${form.age}歳\n理想の体重: ${form.weight_ideal}kg\n写真: ${form.picture?.name || "なし"}`)
-        for (const key in form) {
-            if (!form[key]) {
-                alert("全ての項目を入力してください");
-                return; // 空欄があれば送信中止
+        try {
+            for (const key in form) {
+                if (!form[key]) {
+                    alert("全ての項目を入力してください");
+                    return; // 空欄があれば送信中止
+                }
             }
+
+            isLoading.value = true
+
+            // FormDataを作成してファイルとフォームデータを送信
+            const formData = new FormData()
+            Object.keys(form).forEach(key => {
+                formData.append(key, form[key])
+            });
+            // formData.append('name', form.name)
+            // formData.append('age', form.age)
+            // formData.append('height', form.height)
+            // formData.append('gender', form.gender)
+
+            // formData.append('face_image', form.picture) // 現在は同じ画像を使用
+            // formData.append('user_id', 'user_123') // 適宜ユーザーIDを設定
+            // formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
+
+            console.log('Sending request to API...')
+
+            try {
+                // 本番のAPI呼び出し
+                const response = await $fetch('http://127.0.0.1:8000/init', {
+                    method: 'POST',
+                    body: formData
+                })
+
+                // 成功時の処理
+                console.log('API Response:', response)
+                alert('データ送信完了しました！')
+
+                // main画面に遷移
+                await navigateTo('/DailyLogForm')
+
+            } catch (apiError) {
+                // APIが利用できない場合はダミーデータで続行
+                console.warn('API呼び出しに失敗しました。ダミーデータで続行します:', apiError)
+
+                const dummyResponse = {
+                    answer: "ダミーの解析結果です",
+                    meta: formData,
+                }
+
+                console.log('Using dummy response:', dummyResponse)
+                alert('送信完了 ダミーデータ')
+
+                // 結果画面に遷移
+                await navigateTo('/DailyLogForm')
+            }
+
+        } catch (err) {
+            console.error('Request failed:', err)
+
+            // より詳細なエラー情報を表示
+            let errorMessage = 'リクエストに失敗しました'
+            if (err.response) {
+                console.error('Response status:', err.response.status)
+                console.error('Response data:', err.response._data)
+                errorMessage = `サーバーエラー (${err.response.status}): ${err.response._data?.detail || err.response.statusText}`
+            } else if (err.message) {
+                errorMessage = err.message
+            }
+
+            alert(errorMessage)
+        } finally {
+            isLoading.value = false
         }
+    };
+        //alert(`お名前: ${form.name}\n身長: ${form.height}cm\n年齢: ${form.age}歳\n理想の体重: ${form.weight_ideal}kg\n写真: ${form.picture?.name || "なし"}`);
 
         // const fd = new FormData();
         // fd.append("user_id", form.user_id);
@@ -215,9 +285,8 @@
         // } catch (err) {
         //     console.error(err);
         //     alert("送信に失敗しました");
-        // }
-    };
-
+// }
+        
     // 背景画像
     import { onMounted, onUnmounted, nextTick } from "vue";
     function drawBackground() {

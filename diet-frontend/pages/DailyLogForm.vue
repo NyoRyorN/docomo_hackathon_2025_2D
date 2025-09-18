@@ -1,3 +1,177 @@
+<script setup>
+    // bootstrap import部分
+import { useHead } from '#app'
+import { useFetch } from '#app'
+import { navigateTo } from '#app'
+    useHead({
+        link: [
+            {
+            rel: 'stylesheet',
+            href: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'
+            }
+        ],
+        script: [
+            {
+            src: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
+            defer: true
+            }
+        ],
+        // 背景画像
+        script: [
+            {
+                src: 'https://cdnjs.cloudflare.com/ajax/libs/trianglify/2.0.0/trianglify.min.js',
+                defer: true
+            }
+        ],
+    })
+
+    import { reactive, ref } from "vue"
+
+const form = reactive({
+        weight: "",
+        exercise_time: "",
+        sleep_time: "",
+    })
+
+    const previewUrl = ref(null)
+    const isLoading = ref(false)
+
+    function handleFileUpload(event) {
+    const file = event.target.files[0]
+    if (file) {
+        form.picture = file
+        previewUrl.value = URL.createObjectURL(file)
+    }
+    }
+
+async function handleSubmit() {
+    try {
+        // 画像が選択されているかチェック
+        if (!form.picture) {
+            alert('画像を選択してください')
+            return
+        }
+
+        isLoading.value = true
+
+        // FormDataを作成してファイルとフォームデータを送信
+        const formData = new FormData()
+        formData.append('meal_image', form.picture)
+        formData.append('face_image', form.picture) // 現在は同じ画像を使用
+        formData.append('user_id', 'user_123') // 適宜ユーザーIDを設定
+        formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
+        
+        // 追加のフォームデータ
+        formData.append('weight', form.weight)
+        formData.append('exercise_time', form.exercise_time)
+        formData.append('sleep_time', form.sleep_time)
+
+        console.log('Sending request to API...')
+        
+        try {
+            // 本番のAPI呼び出し
+            const response = await $fetch('http://127.0.0.1:8000/generate-answer', {
+                method: 'POST',
+                body: formData
+            })
+            
+            // 成功時の処理
+            console.log('API Response:', response)
+            alert('解析が完了しました！')
+            
+            // 結果画面に遷移
+            await navigateToNext(response)
+            
+        } catch (apiError) {
+            // APIが利用できない場合はダミーデータで続行
+            console.warn('API呼び出しに失敗しました。ダミーデータで続行します:', apiError)
+            
+            const dummyResponse = {
+                answer: "ダミーの解析結果です",
+                score_percent: 75,
+                improvement: "ダミーの改善案です",
+                future_image_url: null,
+                current_image_url: null,
+                meta: {
+                    user_id: "user_123",
+                    weight: form.weight,
+                    exercise_time: form.exercise_time,
+                    sleep_time: form.sleep_time
+                }
+            }
+            
+            console.log('Using dummy response:', dummyResponse)
+            alert('解析が完了しました！（ダミーデータ）')
+            
+            // 結果画面に遷移
+            await navigateToNext(dummyResponse)
+        }
+        
+    } catch (err) {
+        console.error('Request failed:', err)
+        
+        // より詳細なエラー情報を表示
+        let errorMessage = 'リクエストに失敗しました'
+        if (err.response) {
+            console.error('Response status:', err.response.status)
+            console.error('Response data:', err.response._data)
+            errorMessage = `サーバーエラー (${err.response.status}): ${err.response._data?.detail || err.response.statusText}`
+        } else if (err.message) {
+            errorMessage = err.message
+        }
+        
+        alert(errorMessage)
+    } finally {
+        isLoading.value = false
+    }
+}
+
+    // 背景画像
+    import { onMounted, onUnmounted, nextTick } from "vue";
+    function drawBackground() {
+        const target = document.getElementById("background");
+        if (!target) return;
+
+        // 前回のSVGを削除
+        target.innerHTML = "";
+
+        const rect = target.getBoundingClientRect();
+        const width = rect.width || 1;
+        const height = rect.height || 1;
+
+        const pattern = window.Trianglify({
+            width,
+            height,
+            cell_size: 100,
+            x_colors: "Blues",
+            y_colors: "Blues",
+        });
+
+        target.appendChild(pattern.svg());
+    }
+    onMounted(async () => {
+        await nextTick();
+        // 初回描画
+        drawBackground();
+        // リサイズ時にも描画
+        window.addEventListener("resize", drawBackground);
+    });
+    onUnmounted(() => {
+        window.removeEventListener("resize", drawBackground);
+    });
+
+    // 画面遷移
+    const navigateToNext = async (response) => {
+        // レスポンスデータをセッションストレージに保存
+        if (response) {
+            sessionStorage.setItem('apiResponse', JSON.stringify(response))
+        }
+        
+        // Nuxt.jsのnavigateTo を使用してページ遷移
+        await navigateTo('/ResultsPage')
+    }
+</script>
+
 <template>
     <div class="container">
         <ClientOnly>
@@ -101,8 +275,13 @@
             
                     <!-- ボタン -->
                     <div class="row mt-3 mx-auto">
-                        <button type="submit" class="btn btn-primary w-50 mx-auto fs-4">
-                            未来の自分を見る
+                        <button 
+                            type="submit" 
+                            class="btn btn-primary w-50 mx-auto fs-4"
+                            :disabled="isLoading"
+                        >
+                            <span v-if="isLoading" class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            {{ isLoading ? '解析中...' : '未来の自分を見る' }}
                         </button>
                     </div>
                 </form>
@@ -113,88 +292,6 @@
         </div>
     </div>
 </template>
-
-<script setup>
-    // bootstrap import部分
-    import { useHead } from '#app'
-    useHead({
-        link: [
-            {
-            rel: 'stylesheet',
-            href: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css'
-            }
-        ],
-        script: [
-            {
-            src: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
-            defer: true
-            }
-        ],
-        // 背景画像
-        script: [
-            {
-                src: 'https://cdnjs.cloudflare.com/ajax/libs/trianglify/2.0.0/trianglify.min.js',
-                defer: true
-            }
-        ],
-    })
-
-    import { reactive, ref } from "vue"
-
-    const form = reactive({
-        weight: "",
-        exercise_time: "",
-        sleep_time: "",
-    })
-
-    const previewUrl = ref(null)
-
-    function handleFileUpload(event) {
-    const file = event.target.files[0]
-    if (file) {
-        form.picture = file
-        previewUrl.value = URL.createObjectURL(file)
-    }
-    }
-
-    function handleSubmit() {
-        alert(`今日の体重: ${form.weight}kg\n運動時間: ${form.exercise_time}時間\n昨日の睡眠時間: ${form.sleep_time}`)
-    }
-
-    // 背景画像
-    import { onMounted, onUnmounted, nextTick } from "vue";
-    function drawBackground() {
-        const target = document.getElementById("background");
-        if (!target) return;
-
-        // 前回のSVGを削除
-        target.innerHTML = "";
-
-        const rect = target.getBoundingClientRect();
-        const width = rect.width || 1;
-        const height = rect.height || 1;
-
-        const pattern = window.Trianglify({
-            width,
-            height,
-            cell_size: 100,
-            x_colors: "Blues",
-            y_colors: "Blues",
-        });
-
-        target.appendChild(pattern.svg());
-    }
-    onMounted(async () => {
-        await nextTick();
-        // 初回描画
-        drawBackground();
-        // リサイズ時にも描画
-        window.addEventListener("resize", drawBackground);
-    });
-    onUnmounted(() => {
-        window.removeEventListener("resize", drawBackground);
-    });
-</script>
 
 <style lang="css" scoped>
     .form-group:has(input:required) > label::after {

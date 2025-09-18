@@ -1,30 +1,63 @@
 <script setup>
 import ImageFrame from '~/components/ImageFrame.vue'
+import { ref, onMounted } from 'vue'
+
 const showFatAtFutureImage = ref(true)
+
+// セッションストレージからAPIレスポンスを取得
+const apiResponse = ref(null)
+
+onMounted(() => {
+    if (process.client) {
+        const storedResponse = sessionStorage.getItem('apiResponse')
+        if (storedResponse) {
+            try {
+                apiResponse.value = JSON.parse(storedResponse)
+                console.log('取得したAPIレスポンス:', apiResponse.value)
+            } catch (error) {
+                console.error('APIレスポンスの解析に失敗:', error)
+            }
+        }
+    }
+})
+
 </script>
 
 <template>
     <NuxtLayout name="default">
         <div class="results-main">
             <div class="results-images">
-                <ImageFrame imageUrl="/images/Before.jpg" class="before-image" showImageType="before"/>
-                <ImageFrame v-if="showFatAtFutureImage" class="after-image" imageUrl="/images/After.jpg" showImageType="after"/>
-                <ImageFrame v-else class="after-image" imageUrl="/images/goodAfter.jpg" showImageType="ideal"/>
+                <ImageFrame
+                    class="before-image"
+                    :imageUrl="apiResponse?.current_image_url || '/images/Before.jpg'"
+                    showImageType="before"
+                />
+                <ImageFrame
+                    class="after-image"
+                    :imageUrl="apiResponse?.future_image_url || '/images/After.jpg'"
+                    showImageType="after"
+                />
+
+                <!-- <ImageFrame class="after-image" imageUrl="/images/goodAfter.jpg" showImageType="ideal"/> -->
             </div>
             <div class="recommendations">
                 <div class="score-container">
                     <div class="score">
                         <h2 class="score-title">肥満確率</h2>
-                        <div class="percentage">85%</div>
+                        <div class="percentage">
+                            {{ apiResponse?.score_percent }}%
+                        </div>
                     </div>
                 </div>
+                <h2>分析結果</h2>
+                <div>
+                    {{ apiResponse?.answer }}
+                </div>
                 <h2>おすすめの健康習慣</h2>
-                <ul>
-                    <li>バランスの取れた食事を心がける</li>
-                    <li>定期的な運動を取り入れる</li>
-                    <li>十分な睡眠を確保する</li>
-                    <li>ストレス管理を行う</li>
-                </ul>
+                <div>
+                    {{ apiResponse?.improvement }}
+                </div>
+
                 <div class="ideal_buttons">
                     <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
                         理想の自分へ

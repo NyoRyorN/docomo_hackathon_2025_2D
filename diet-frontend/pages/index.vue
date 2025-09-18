@@ -57,7 +57,7 @@ onMounted(() => {
               あなたの健康をサポートします。今すぐ始めましょう！
             </p>
             <div class="buttons">
-                <NuxtLink to="/ResultsPage" class="navigator_link">
+                <NuxtLink to="/" class="navigator_link non-use">
                     始める
                 </NuxtLink>
                 <NuxtLink to="/BasicInfoForm" class="navigator_link">
@@ -236,5 +236,10 @@ onMounted(() => {
 .text-white {
   color: black !important;
   text-align: center;
+}
+
+.non-use {
+  pointer-events: none;
+  opacity: 0.6;
 }
 </style>
