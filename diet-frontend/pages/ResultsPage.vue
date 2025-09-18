@@ -58,11 +58,11 @@ onMounted(() => {
                     {{ apiResponse?.improvement }}
                 </div>
 
-                <div class="ideal_buttons">
+                <!-- <div class="ideal_buttons">
                     <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
                         理想の自分へ
                     </NuxtLink>
-                </div>
+                </div> -->
             </div>
         </div>
     </NuxtLayout>
