@@ -1,6 +1,26 @@
 <script setup>
 import ImageFrame from '~/components/ImageFrame.vue'
+import { ref, onMounted } from 'vue'
+
 const showFatAtFutureImage = ref(true)
+
+// セッションストレージからAPIレスポンスを取得
+const apiResponse = ref(null)
+
+onMounted(() => {
+    if (process.client) {
+        const storedResponse = sessionStorage.getItem('apiResponse')
+        if (storedResponse) {
+            try {
+                apiResponse.value = JSON.parse(storedResponse)
+                console.log('取得したAPIレスポンス:', apiResponse.value)
+            } catch (error) {
+                console.error('APIレスポンスの解析に失敗:', error)
+            }
+        }
+    }
+})
+
 </script>
 
 <template>
@@ -24,6 +44,7 @@ const showFatAtFutureImage = ref(true)
                     <li>定期的な運動を取り入れる</li>
                     <li>十分な睡眠を確保する</li>
                     <li>ストレス管理を行う</li>
+                    <li>{{ apiResponse }}</li>
                 </ul>
                 <div class="ideal_buttons">
                     <NuxtLink to="/ResultsPage" class="navigator_link" @click="showFatAtFutureImage = !showFatAtFutureImage">
