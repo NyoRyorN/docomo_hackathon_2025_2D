@@ -180,29 +180,32 @@ def fetch_init_info(user_id: str):
 
 def fetch_past_info(user_id: str):
     """
-    直近7日分（今日を0として6日前まで）をキー: "{i}_day_ago" で返却。
-    各日につき最新1件のみ。画像はURL。
+    直近の7回分を返却。
+    最新から順に取得し、7件未満ならあるだけ返す。
+    返却形式: dict[str, dict], キーは "0_day_ago", "1_day_ago", ... とする。
     """
     _ensure_tables()
     past: dict[str, dict] = {}
     conn = _get_conn()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT user_id, created_at, meal_image_url, weight_kg, habits, sleep_hour
+                FROM meal_log
+                WHERE user_id=%s
+                ORDER BY created_at DESC
+                LIMIT 7
+                """,
+                (user_id,)
+            )
+            rows = cur.fetchall()
+
             for i in range(7):
-                day = (datetime.now() - timedelta(days=i)).date()
-                cur.execute(
-                    """
-                    SELECT user_id, created_at, meal_image_url, weight_kg, habits, sleep_hour
-                    FROM meal_log
-                    WHERE user_id=%s AND DATE(created_at)=%s
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                    """,
-                    (user_id, day)
-                )
-                row = cur.fetchone()
-                if not row:
-                    row = {
+                if i < len(rows):
+                    past[f"{i}_day_ago"] = rows[i]
+                else:
+                    past[f"{i}_day_ago"] = {
                         "user_id": user_id,
                         "created_at": None,
                         "meal_image_url": None,
@@ -210,10 +213,10 @@ def fetch_past_info(user_id: str):
                         "habits": None,
                         "sleep_hour": None
                     }
-                past[f"{i}_day_ago"] = row
     finally:
         conn.close()
     return past
+
 
 # =============================
 # 生成結果（result dict 仕様）
@@ -253,6 +256,8 @@ def save_generated_answer(result: dict) -> int:
         return 0
     finally:
         conn.close()
+
+    return 0
 
 # =============================
 # 入力補助
