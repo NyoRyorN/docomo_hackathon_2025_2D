@@ -62,7 +62,6 @@ async function handleSubmit() {
         formData.append('session_id', `session_${Date.now()}`) // セッションIDを生成
         
         // 追加のフォームデータ
-        // 追加のフォームデータ
         formData.append('weight', form.weight)
         formData.append('exercise_time', form.exercise_time)
         formData.append('sleep_time', form.sleep_time)
@@ -89,6 +88,10 @@ async function handleSubmit() {
             
             const dummyResponse = {
                 answer: "ダミーの解析結果です",
+                score_percent: 75,
+                improvement: "ダミーの改善案です",
+                future_image_url: null,
+                current_image_url: null,
                 meta: {
                     user_id: "user_123",
                     weight: form.weight,
