@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Union, Callable
 import base64
 import urllib.parse
 import httpx
-from database import save_init_list, fetch_info, save_generated_answer
+from database import save_init_list, fetch_info, save_past_info, save_generated_answer
 from generater import generate_answer
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -85,10 +85,10 @@ class InitRequest(BaseModel):
     session_id: Optional[str] = Field(None, description="セッション識別子（任意）")
 
     name: Optional[str] = Field(None, description="ユーザ名（任意）")
-    age: Optional[str] = Field(None, description="年齢（任意、DBでは years に対応）")          # ← str に変更
-    height: Optional[str] = Field(None, description="身長（任意）")                           # ← str に変更
+    age: Optional[int] = Field(None, description="年齢（任意、DBでは years に対応）")          # ← str に変更
+    height: Optional[int] = Field(None, description="身長（任意）")                           # ← str に変更
     gender: Optional[str] = Field(None, description="性別（任意）")
-    weight_ideal: Optional[str] = Field(None, description="理想体重（任意）")                # ← str に変更
+    weight_ideal: Optional[int] = Field(None, description="理想体重（任意）")                # ← str に変更
     picture: Optional[str] = Field(None, description="プロフィール画像URL（任意）")
 
 
@@ -96,11 +96,19 @@ class InitResponse(BaseModel):
     ok: bool
     stored_count: int
 
+class AnswerRequest(BaseModel):
+    """画像アップロード＋各種数値を受け取る"""
+    name : str = Field(..., description="ユーザ名（user_idとして利用、必須）")
+    weight: Optional[int] = Field(None, description="体重（任意）")                 # ← str に変更
+    exercise_time: Optional[int] = Field(None, description="運動時間（分、任意）") # ← str に変更
+    sleep_time: Optional[int] = Field(None, description="睡眠時間（時間、任意）")   # ← str に変更
+    meal_image_url: Optional[str] = Field(None, description="食事画像のURL（必須、jpg/png等）")
+
 class AnswerResponse(BaseModel):
     """生成された回答を返す"""
     ok: bool
     answer: Union[str, Dict[str, Any]] = Field(..., description="生成された回答（文字列 or 詳細辞書）")
-    score_percent: Optional[str] = Field(None, description="スコア（%）")                     # ← str に変更
+    score_percent: Optional[int] = Field(None, description="スコア（%）")                     # ← str に変更
     improvement: Optional[str] = Field(None, description="改善点（文字列）")
     future_image_url: Optional[str] = Field(None, description="将来予測画像のURL（任意）")
     current_image_url: Optional[str] = Field(None, description="現在の画像のURL（任意）")
@@ -152,30 +160,29 @@ def init_main() -> FastAPI:
 
     # ========= 役割 (2) 画像URL→過去取得→回答生成→保存→返却 =========
     @app.post("/generate-answer", response_model=AnswerResponse, tags=["generate"])
-    async def generate_from_images(
-        name: str = Form(..., description="ユーザ名（user_idとして利用）"),
-        weight: Optional[str] = Form(None, description="体重"),                 # ← str に変更
-        exercise_time: Optional[str] = Form(None, description="運動時間（分）"), # ← str に変更
-        sleep_time: Optional[str] = Form(None, description="睡眠時間（時間）"),   # ← str に変更
-        picture: str = Form(..., description="食事画像のURL（jpg/png等）"),
-    ) -> AnswerResponse:
+    def generate_from_images(req: AnswerRequest) -> AnswerResponse:
         try:
-            user_id = name
+            #データ保存
+            save_past_info(
+                user_id=req.name,
+                weight_kg=req.weight,
+                habits=req.exercise_time,
+                sleep_hour=req.sleep_time,
+            )
 
             # (a) 過去情報（必要なら取得）
-
             init: Dict[str, Any] = {}
             past: Dict[str, Any] = {}
 
-            init, past = fetch_info(user_id=user_id)
+            init, past = fetch_info(user_id=req.name)
 
             # (b) 画像URL→バイト列（必須の食事画像 / 顔はあれば）
-            meal_bytes = await url_to_bytes(picture, require_image=True)
+            meal_bytes = url_to_bytes(req.picture, require_image=True)
 
             face_bytes = None
             face_url = init.get("individual_photo_url")
             if face_url:
-                face_bytes = await url_to_bytes(face_url, require_image=True)
+                face_bytes = url_to_bytes(req.face_url, require_image=True)
 
             # init/past から画像URLは削除（generate には渡さない想定）
             init.pop("individual_photo_url", None)
@@ -184,12 +191,12 @@ def init_main() -> FastAPI:
                     v.pop("meal_image_url", None)
 
             # init に直近の値を注入（すべて文字列）
-            if weight is not None:
-                init["weight_kg"] = weight
-            if exercise_time is not None:
-                init["exercise_time"] = exercise_time
-            if sleep_time is not None:
-                init["sleep_hour"] = sleep_time
+            if req.weight is not None:
+                init["weight_kg"] = req.weight
+            if req.exercise_time is not None:
+                init["exercise_time"] = req.exercise_time
+            if req.sleep_time is not None:
+                init["sleep_hour"] = req.sleep_time
 
             # (c) 回答生成（必須）
 
@@ -200,9 +207,6 @@ def init_main() -> FastAPI:
                 result = dict(raw_result)  # コピー
             else:
                 result = {"answer": raw_result}
-
-            # 保存関数が user_id 必須のため補完
-            result.setdefault("user_id", user_id)
 
             # (d) 生成結果を保存（存在すれば）
             save_generated_answer(result)

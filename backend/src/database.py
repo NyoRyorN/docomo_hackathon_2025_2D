@@ -38,9 +38,9 @@ def _ensure_tables():
     ddl_user = """
     CREATE TABLE IF NOT EXISTS user_profile (
         user_id VARCHAR(64) PRIMARY KEY,
-        height VARCHAR(32) NULL,
+        height INT NULL,
         gender VARCHAR(16) NULL,
-        years VARCHAR(32) NULL,
+        years INT NULL,
         individual_photo_url VARCHAR(1024) NULL,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -51,9 +51,9 @@ def _ensure_tables():
         user_id VARCHAR(64) NOT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         meal_image_url VARCHAR(1024) NULL,
-        weight_kg VARCHAR(32) NULL,
-        habits TEXT NULL,
-        sleep_hour VARCHAR(32) NULL,
+        weight_kg INT NULL,
+        habits INT NULL,
+        sleep_hour INT NULL,
         KEY idx_user_date (user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -62,7 +62,7 @@ def _ensure_tables():
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         user_id VARCHAR(64) NOT NULL,
         answer TEXT NULL,
-        score_percent VARCHAR(32) NULL,
+        score_percent INT NULL,
         improvement TEXT NULL,
         future_image_url VARCHAR(1024) NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -122,6 +122,27 @@ def fetch_info(user_id: str):
     init = fetch_init_info(user_id)
     past = fetch_past_info(user_id)
     return init, past
+
+def save_past_info(
+    user_id: str,
+    weight_kg: int | None = None,
+    habits: int | None = None,
+    sleep_hour: int | None = None,
+    meal_image_url: str | None = None
+) -> int:
+    """食事/体重/睡眠ログを1件追加（画像はURL）"""
+    _ensure_tables()
+    sql = """
+    INSERT INTO meal_log (user_id, meal_image_url, weight_kg, habits, sleep_hour, created_at)
+    VALUES (%s, %s, %s, %s, %s, NOW())
+    """
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id, meal_image_url, weight_kg, habits, sleep_hour))
+        return 0
+    finally:
+        conn.close()
 
 def fetch_init_info(user_id: str):
     _ensure_tables()
@@ -222,9 +243,9 @@ def save_generated_answer(result: dict) -> int:
 # =============================
 def add_meal_log(
     user_id: str,
-    weight_kg: str | None = None,
-    habits: str | None = None,
-    sleep_hour: str | None = None,
+    weight_kg: int | None = None,
+    habits: int | None = None,
+    sleep_hour: int | None = None,
     meal_image_url: str | None = None
 ) -> int:
     """食事/体重/睡眠ログを1件追加（画像はURL）"""
@@ -252,11 +273,11 @@ if __name__ == "__main__":
     save_init_list(uid, "171.2", "male", "24", "https://example.com/avatar.png")
 
     # 食事ログ（URLで, 数値はstr）
-    add_meal_log(
+    save_past_info(
         uid,
-        weight_kg="68.4",
-        habits="夜食控えめ",
-        sleep_hour="6.5",
+        weight_kg=70,
+        habits= 4,
+        sleep_hour=7,
         meal_image_url="https://example.com/meal.jpg"
     )
 
@@ -264,7 +285,7 @@ if __name__ == "__main__":
     result = {
         "user_id": uid,
         "answer": "今日の提案：たんぱく質を少し増やしましょう。",
-        "score_percent": "82.0",  # ← 文字列でOK（数値でもstrにして保存）
+        "score_percent": 82,  # ← 文字列でOK（数値でもstrにして保存）
         "improvement": "間食にヨーグルトを追加",
         "future_image_url": "https://example.com/ai_result.png"
     }
