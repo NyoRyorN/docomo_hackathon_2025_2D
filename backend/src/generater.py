@@ -48,6 +48,12 @@ def _image_block(img_bytes: bytes, media_type: str = "image/jpeg") -> Dict[str, 
         "source": {"type": "base64", "media_type": media_type, "data": base64.b64encode(img_bytes).decode("utf-8")},
     }
 
+from datetime import datetime
+def json_safe(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()  # ISO 8601 形式の文字列に変換
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
 def _build_claude_payload(meal_image: bytes, face_image: bytes, past: Dict[str, Any], init: Any) -> Dict[str, Any]:
     # init は dict / list いずれも許容（そのままJSON文字列にして渡す）
     system = (
@@ -64,7 +70,7 @@ def _build_claude_payload(meal_image: bytes, face_image: bytes, past: Dict[str, 
         "score_percent は 0〜100 で、低いほどリスクが高いとします。"
         "\n\n[CONTEXT]\n"
         f"パーソナル情報: {json.dumps(init, ensure_ascii=False)}\n"
-        f"過去情報: {json.dumps(past, ensure_ascii=False)}\n"
+        f"過去情報: {json.dumps(past, ensure_ascii=False, default=json_safe)}\n"
         "- 顔画像から敏感属性は推論しない\n"
         "- 医療診断はしない\n"
         "- 出力は指定JSONのみ\n"
