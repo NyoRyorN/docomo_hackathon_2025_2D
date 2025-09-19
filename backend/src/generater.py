@@ -174,6 +174,54 @@ The person should be standing with an exaggeratedly slouched and hunched posture
         raise RuntimeError("Nova Canvas responseに画像データが見つかりません。")
     return base64.b64decode(img_b64)
 
+def _invoke_nova_canvas_muscle(face_image: bytes, similarity: float = 0.98) -> bytes:
+    import base64, json
+    b64 = base64.b64encode(face_image).decode("utf-8")
+
+    prompt = (
+        """Generate one realistic photographic image of a single person.
+Keep the same face identity and clothing as the input photo.
+Depict the person with a very muscular and athletic physique: broad shoulders, defined chest, strong arms, visible six-pack abs, thick legs, and an overall fit, lean, and powerful body.
+The person should appear confident and energetic, with an upright posture, standing tall, chest out, and looking motivated and healthy.
+Make the body appear naturally athletic, not cartoonish, and maintain a realistic photographic style."""
+    )
+
+    negative = (
+        "obese, overweight, skinny, underweight, duplicate person, two people, side-by-side, collage, "
+        "cartoon, anime, deformed, unrealistic, low quality"
+    )
+
+    payload = {
+        "taskType": "IMAGE_VARIATION",
+        "imageVariationParams": {
+            "images": [b64],
+            "text": prompt,
+            "negativeText": negative,
+            "similarityStrength": max(0.95, min(1.0, similarity)),
+        },
+        "imageGenerationConfig": {
+            "numberOfImages": 1,
+            "cfgScale": 6.5,
+            "seed": 42
+        },
+    }
+
+    resp = _bedrock.invoke_model(
+        modelId=NOVA_CANVAS_MODEL_ID,
+        body=json.dumps(payload),
+        contentType="application/json",
+        accept="application/json",
+    )
+
+    out = json.loads(resp["body"].read())
+    imgs = out.get("images") or []
+    
+    if not imgs:
+        raise RuntimeError("Nova Canvas responseに画像がありません。")
+    img_b64 = imgs[0] if isinstance(imgs[0], str) else imgs[0].get("b64") or imgs[0].get("base64Data")
+    if not img_b64:
+        raise RuntimeError("Nova Canvas responseに画像データが見つかりません。")
+    return base64.b64decode(img_b64)
 
 
 def _put_to_s3_and_get_url(png_bytes: bytes) -> str:
@@ -223,12 +271,18 @@ def generate_answer(meal_image_bytes: bytes, face_image_bytes: bytes,
 
     # 2) 将来画像（必要なら）
     future_url = None
-    if score_percent < SCORE_THRESHOLD:
+    if score_percent <= SCORE_THRESHOLD:
         try:
             png = _invoke_nova_canvas_fat(face_image_bytes, similarity=0.98)
             future_url = _put_to_s3_and_get_url(png)
         except Exception as e:
             # 画像生成失敗時はログのみ（本関数はraiseしない設計）
+            print(f"[warn] future image generation failed: {e}")
+    elif score_percent > SCORE_THRESHOLD:  # 例: スコアが高い場合はムキムキ未来像
+        try:
+            png = _invoke_nova_canvas_muscle(face_image_bytes, similarity=0.98)
+            future_url = _put_to_s3_and_get_url(png)
+        except Exception as e:
             print(f"[warn] future image generation failed: {e}")
 
     return {
@@ -247,9 +301,9 @@ import json
 
 if __name__ == "__main__":
     # ローカルテスト用
-    with open(r"C:\Users\User\Downloads\test_food.jpg", "rb") as f:
+    with open(r"C:\Users\User\Downloads\test_food_muscle.jpg", "rb") as f:
         meal_bytes = f.read()
-    with open(r"C:\Users\User\Downloads\istockphoto-620988108-612x612.jpg", "rb") as f:
+    with open(r"C:\Users\User\Downloads\10131043102", "rb") as f:
         face_bytes = f.read()
 
     res = generate_answer(meal_bytes, face_bytes, past={"example": "data"}, init=[])
